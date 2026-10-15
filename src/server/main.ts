@@ -198,7 +198,7 @@ async function stdio() {
   if (!tok) die(`No token for ${url}. Set DRAFT_TOKEN or run: draft connect codex --url ${url} --token <token>`);
   const client = new Client({ name: 'draft-stdio-bridge', version: VERSION });
   await client.connect(new StreamableHTTPClientTransport(new URL(`${url}/mcp`), { requestInit: { headers: { Authorization: `Bearer ${tok}` } } }));
-  const server = new Server({ name: 'draft', version: VERSION }, { capabilities: { tools: {} }, instructions: client.getInstructions() });
+  const server = new Server({ ...client.getServerVersion(), name: 'draft', version: VERSION }, { capabilities: { tools: {} }, instructions: client.getInstructions() });
   server.setRequestHandler(ListToolsRequestSchema, (r) => client.listTools(r.params));
   server.setRequestHandler(CallToolRequestSchema, (r) => client.callTool(r.params) as never);
   await server.connect(new StdioServerTransport());

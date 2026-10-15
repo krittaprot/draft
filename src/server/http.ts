@@ -373,6 +373,7 @@ export function createHttpServer(engine: Engine, opts: { trustProxy: boolean; ne
     try {
       const pth = url.pathname;
       if (pth === '/healthz') return send(res, 200, { ok: true, name: 'draft', version: VERSION });
+      if (pth === '/favicon.ico') { res.writeHead(302, { location: '/icons/icon-192.png' }).end(); return; }
       if (pth === '/mcp' || pth === '/mcp/') return await handleMcp(req, res);
       if (pth.startsWith('/api/')) return await handleApi(req, res, url);
 
@@ -390,7 +391,7 @@ export function createHttpServer(engine: Engine, opts: { trustProxy: boolean; ne
           const form = new URLSearchParams((await readBody(req)).toString('utf8'));
           const next = safeNext(form.get('next'));
           const tok = form.get('token') ?? '';
-          const p = tok.startsWith('tandem_at_') ? null : auth.verify(tok, clientIp(req));
+          const p = /^(draft|tandem)_at_/.test(tok) ? null : auth.verify(tok, clientIp(req));
           if (!p) return send(res, 401, LOGIN_PAGE({ error: auth.blocked(clientIp(req)) ? 'Too many attempts. Try again in 10 minutes.' : 'That token is not valid.', next, google, tokens }), 'text/html');
           setSession(req, res, p);
           res.writeHead(303, { location: next }).end();

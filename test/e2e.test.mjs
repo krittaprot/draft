@@ -93,18 +93,26 @@ test('CLI discovers tools, draws from JSON and stdin, and enforces permissions',
 test('agent designs a screen, sees it, and the history records it', async () => {
   const c = await connect(owner);
   const tools = (await c.listTools()).tools.map((t) => t.name);
+  const info = c.getServerVersion();
+  assert.equal(info.title, 'Draft');
+  assert.equal(info.websiteUrl, base);
+  assert.equal(info.icons[0].src, `${base}/icons/icon-512.png`);
+  const icon = await fetch(info.icons[0].src);
+  assert.equal(icon.status, 200);
+  assert.match(icon.headers.get('content-type'), /image\/png/);
+  assert.equal((await fetch(`${base}/favicon.ico`)).status, 200);
   for (const t of ['create_document', 'create_nodes', 'update_nodes', 'screenshot', 'list_comments', 'get_history', 'export']) assert.ok(tools.includes(t), t);
   assert.match(c.getInstructions() ?? '', /shared design canvas/);
 
   const created = textOf(await call(c, 'create_document', { name: 'Landing' }));
   const doc = /d_[a-z0-9]+/.exec(created)[0];
 
-  const icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L20 7"/></svg>';
+  const iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L20 7"/></svg>';
   const feature = (id, title) => ({
     type: 'frame', id, layout: 'column', gap: 8, padding: 24, width: 'fill', fill: '#ffffff', radius: 16,
     shadows: [{ x: 0, y: 8, blur: 24, color: 'rgba(15,23,42,0.08)' }],
     children: [
-      { type: 'svg', svg: icon, width: 28, height: 28, color: '#2563eb' },
+      { type: 'svg', svg: iconSvg, width: 28, height: 28, color: '#2563eb' },
       { type: 'text', text: title, fontSize: 20, fontWeight: 700, color: '#0f172a' },
       { type: 'text', text: 'Agents and people edit the same canvas, with every change recorded and reviewable.', fontSize: 15, color: '#475569', width: 'fill', lineHeight: 1.5 },
     ],
