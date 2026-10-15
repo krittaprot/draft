@@ -358,6 +358,12 @@ export function createHttpServer(engine: Engine, opts: { trustProxy: boolean; ne
       if (pth === '/mcp' || pth === '/mcp/') return await handleMcp(req, res);
       if (pth.startsWith('/api/')) return await handleApi(req, res, url);
 
+      if (opts.neon && req.method === 'GET' && url.searchParams.has('neon_auth_session_verifier') && pth !== '/auth/neon/callback') {
+        console.log(`[auth] verifier arrived at ${pth}; forwarding to the callback`);
+        res.writeHead(303, { location: `/auth/neon/callback${url.search}` }).end();
+        return;
+      }
+
       if (pth === '/login') {
         const google = !!opts.neon;
         const tokens = tokenLoginOk(req);
@@ -383,15 +389,18 @@ export function createHttpServer(engine: Engine, opts: { trustProxy: boolean; ne
           res.writeHead(303, { location: `/login?error=${encodeURIComponent("Google sign-in isn't available right now. Use an access token, or try again later.")}&next=${encodeURIComponent(next)}` }).end();
           return;
         }
-        res.writeHead(303, { location: to, 'set-cookie': `tandem_flow=${flowId}; Path=/auth/neon; HttpOnly; SameSite=Lax; Max-Age=600${secure(req) ? '; Secure' : ''}` }).end();
+        console.log(`[auth] google sign-in started (next ${next})`);
+        res.writeHead(303, { location: to, 'set-cookie': `tandem_flow=${flowId}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600${secure(req) ? '; Secure' : ''}` }).end();
         return;
       }
       if (pth === '/auth/neon/callback' && opts.neon) {
-        const clear = 'tandem_flow=; Path=/auth/neon; Max-Age=0';
+        const clear = 'tandem_flow=; Path=/; Max-Age=0';
+        console.log(`[auth] google callback: flow cookie ${cookies(req).tandem_flow ? 'present' : 'missing'}, verifier ${url.searchParams.has('neon_auth_session_verifier') ? 'present' : 'missing'}${url.searchParams.get('error') ? `, error ${url.searchParams.get('error')}` : ''}`);
         const back = (msg: string, next = '/') => res.writeHead(303, { location: `/login?error=${encodeURIComponent(msg)}&next=${encodeURIComponent(next)}`, 'set-cookie': clear }).end();
         let result;
-        try { result = await opts.neon.finish(cookies(req).tandem_flow, url.searchParams.get('neon_auth_session_verifier')); } catch (e) { back((e as Error).message); return; }
+        try { result = await opts.neon.finish(cookies(req).tandem_flow, url.searchParams.get('neon_auth_session_verifier')); } catch (e) { console.log(`[auth] google callback failed: ${(e as Error).message}`); back((e as Error).message); return; }
         const p = auth.memberLogin(result.user.email);
+        console.log(`[auth] google sign-in ${p ? 'accepted' : 'refused'} for ${result.user.email}`);
         if (!p) { back(`${result.user.email} can't sign in to this Tandem.`, result.next); return; }
         res.setHeader('set-cookie', [clear]);
         setSession(req, res, p);
