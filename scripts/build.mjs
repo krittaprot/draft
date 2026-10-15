@@ -26,7 +26,7 @@ await build({
 });
 // copy the static web files (pages, styles, service worker, fonts, icons, screenshots); app.ts is bundled above
 fs.cpSync(path.join(root, 'src/web'), path.join(dist, 'web'), { recursive: true, filter: (f) => !f.endsWith('.ts') });
-// Version the scripts and styles: pages reference /app.js?v=<hash>, so a release can never mix a new page with a
+// Version the scripts, styles and images: pages reference /app.js?v=<hash>, so a release can never mix a new page with a
 // browser's or CDN's cached old script (Cloudflare can override no-cache with a long browser TTL on .js/.css).
 const web = path.join(dist, 'web');
 const hash = (f) => crypto.createHash('sha256').update(fs.readFileSync(path.join(web, f))).digest('hex').slice(0, 10);
@@ -39,7 +39,9 @@ for (const f of ['tokens.css', 'landing.css', 'style.css', 'app.js', 'pwa.js']) 
   }
   versioned[f] = hash(f);
 }
-for (const page of ['index.html', 'landing.html', 'offline.html', 'sw.js']) {
+// icons and screenshots too: a new icon or capture must never be hidden behind a cached old one
+for (const dir of ['icons', 'shots']) for (const f of fs.readdirSync(path.join(web, dir))) if (f.endsWith('.png')) versioned[`${dir}/${f}`] = hash(`${dir}/${f}`);
+for (const page of ['index.html', 'landing.html', 'offline.html', 'sw.js', 'manifest.webmanifest']) {
   const file = path.join(web, page);
   let text = fs.readFileSync(file, 'utf8');
   for (const [f, v] of Object.entries(versioned)) text = text.replaceAll(`'/${f}'`, `'/${f}?v=${v}'`).replaceAll(`"/${f}"`, `"/${f}?v=${v}"`);
@@ -47,4 +49,4 @@ for (const page of ['index.html', 'landing.html', 'offline.html', 'sw.js']) {
   if (page === 'sw.js') text = text.replace("const CACHE = 'tandem-shell-v1';", `const CACHE = 'tandem-shell-${versioned['app.js']}${versioned['style.css']}';`);
   fs.writeFileSync(file, text);
 }
-console.log('built dist/server.js and dist/web/ (assets', Object.entries(versioned).map(([f, v]) => `${f}?v=${v}`).join(', ') + ')');
+console.log('built dist/server.js and dist/web/ (assets', Object.entries(versioned).filter(([f]) => !f.includes('/')).map(([f, v]) => `${f}?v=${v}`).join(', ') + `, plus ${Object.keys(versioned).filter((f) => f.includes('/')).length} images)`);

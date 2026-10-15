@@ -11,7 +11,7 @@ import { createHttpServer } from './http.ts';
 import { NeonLogin } from './neon.ts';
 import { VERSION } from './mcp.ts';
 
-const HELP = `tandem ${VERSION} — an open design canvas for AI agents
+const HELP = `tandem ${VERSION} — the self-hosted design canvas for you and your AI agents
 
 Usage:
   tandem serve [--port 3290] [--host 127.0.0.1] [--data DIR] [--public-url URL]

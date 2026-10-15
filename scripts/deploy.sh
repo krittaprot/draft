@@ -7,7 +7,8 @@ set -euo pipefail
 source "$(dirname "$0")/_env.sh"
 KEEP=5
 
-pnpm test
+# also check the live Google sign-in round trip against this deployment's Neon Auth
+TANDEM_TEST_NEON_AUTH_URL=${TANDEM_NEON_AUTH_URL:-} TANDEM_TEST_PUBLIC_URL=${TANDEM_HOSTNAME:+https://$TANDEM_HOSTNAME} pnpm test
 
 STAMP=$(date -u +%Y-%m-%dT%H-%M-%SZ)
 REL="$APP_HOME/releases/$STAMP"

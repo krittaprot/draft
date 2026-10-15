@@ -213,7 +213,7 @@ test('home screen thumbnails: a picture for designs, nothing for empty ones', as
   assert.equal((await fetch(`${base}/api/docs/${full.id}/thumb.png`)).status, 401, 'needs sign-in');
 });
 
-test('pages load versioned scripts, so a release never runs a cached old app.js', async () => {
+test('pages load versioned scripts and images, so a release never shows a cached old one', async () => {
   const login = await fetch(`${base}/login`, { method: 'POST', body: new URLSearchParams({ token: owner }), redirect: 'manual' });
   const cookie = login.headers.get('set-cookie').split(';')[0];
   const html = await (await fetch(`${base}/`, { headers: { cookie } })).text();
@@ -225,4 +225,12 @@ test('pages load versioned scripts, so a release never runs a cached old app.js'
   assert.equal(plain.headers.get('cache-control'), 'no-cache');
   assert.equal(plain.headers.get('cdn-cache-control'), 'no-store');
   assert.equal((await fetch(`${base}/sw.js`)).headers.get('cdn-cache-control'), 'no-store');
+  // icons and screenshots too: a new icon must never hide behind a cached old one
+  assert.match(html, /href="\/icons\/icon-192\.png\?v=[0-9a-f]{10}"/);
+  const landing = await (await fetch(`${base}/`)).text();
+  assert.match(landing, /src="\/shots\/review\.png\?v=[0-9a-f]{10}"/);
+  const manifest = await (await fetch(`${base}/manifest.webmanifest`)).json();
+  assert.ok(manifest.icons.every((i) => /\?v=[0-9a-f]{10}$/.test(i.src)), 'manifest icons are versioned');
+  const icon = await fetch(`${base}/icons/icon-192.png`);
+  assert.equal(icon.headers.get('cdn-cache-control'), 'no-store', 'the CDN never keeps an unversioned icon');
 });

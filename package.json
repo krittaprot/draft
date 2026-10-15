@@ -1,8 +1,31 @@
 {
   "name": "tandem",
   "version": "0.1.0",
-  "description": "Open-source design canvas that AI agents (Claude Code, Codex, opencode) drive over MCP, with a live editor for human edits and review.",
+  "description": "The self-hosted design canvas for you and your AI agents: Claude Code, Codex and opencode design over MCP while you watch, edit by hand and review.",
   "license": "MIT",
+  "author": "Krittaprot",
+  "homepage": "https://github.com/krittaprot/tandem#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/krittaprot/tandem.git"
+  },
+  "bugs": {
+    "url": "https://github.com/krittaprot/tandem/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "design-tool",
+    "canvas",
+    "self-hosted",
+    "ai-agents",
+    "claude-code",
+    "codex",
+    "opencode",
+    "figma-alternative",
+    "pwa"
+  ],
+  "packageManager": "pnpm@11.20.0",
   "type": "module",
   "bin": {
     "tandem": "bin/tandem.js"

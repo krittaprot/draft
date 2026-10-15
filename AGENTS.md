@@ -83,6 +83,13 @@ node dist/server.js serve --port 3299 --data <scratch dir> --public-url http://1
 7. **Home and editor routing is hash-based.** `#doc=<id>[&node=<id>]` opens a design; anything else shows Home. Live SSE refreshes of Home must check `onHome()` so they don't cover the editor.
 8. **Read-only UI.** `body.readonly` is set for viewers and during revision preview, `body.viewer` for viewers. Mark edit-only inspector buttons `edit-only` and comment buttons `comment-only`.
 
+## Testing sign-in
+
+`test/oauth.test.mjs` checks the live Google sign-in round trip only when `TANDEM_TEST_NEON_AUTH_URL` and `TANDEM_TEST_PUBLIC_URL` are set. Without them it uses an address that never answers and checks everything else.
+- `deploy.sh` sets both from `deploy/deploy.env`.
+- CI and contributors run without them.
+- Agent shells are often sandboxed away from the internet, and then the live check reports "unreachable". Use a real terminal to check it.
+
 ## Testing the editor
 
 There are no automated browser tests yet; `test/` covers the server, MCP and OAuth. To check UI changes by hand:

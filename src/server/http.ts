@@ -474,8 +474,9 @@ export function createHttpServer(engine: Engine, opts: { trustProxy: boolean; ne
         const longLived = /^\/(fonts|icons|shots)\//.test(pth);
         res.writeHead(200, {
           'content-type': TYPES[pub[1]], 'x-content-type-options': 'nosniff',
-          'cache-control': fixed ? 'public, max-age=31536000, immutable' : longLived ? 'public, max-age=86400' : 'no-cache',
-          ...(fixed || longLived ? {} : { 'cdn-cache-control': 'no-store' }),
+          // fonts never change; unversioned icons and screenshots (server pages, old links) may, so the CDN must not keep them
+          'cache-control': fixed ? 'public, max-age=31536000, immutable' : pth.startsWith('/fonts/') ? 'public, max-age=86400' : longLived ? 'public, max-age=3600' : 'no-cache',
+          ...(fixed || pth.startsWith('/fonts/') ? {} : { 'cdn-cache-control': 'no-store' }),
         });
         return res.end(fs.readFileSync(path.join(WEB_DIR, pth.slice(1))));
       }

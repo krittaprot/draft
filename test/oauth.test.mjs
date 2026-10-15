@@ -16,7 +16,11 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const port = 3900 + Math.floor(Math.random() * 500);
 const base = `http://127.0.0.1:${port}`;
 const data = fs.mkdtempSync(path.join(os.tmpdir(), 'tandem-oauth-'));
-const NEON = 'https://ep-icy-grass-b34wtlhr.neonauth.c-4.ap-southeast-1.aws.neon.tech/neondb/auth';
+// The live Google sign-in round trip needs a real Neon Auth URL (deploy.sh passes the deployment's own, and its public URL). Without one, every other check runs against an address that never answers.
+const LIVE_NEON = process.env.TANDEM_TEST_NEON_AUTH_URL || '';
+const NEON = LIVE_NEON || 'https://neon-auth.invalid/neondb/auth';
+// the origin the live check presents to Neon; it must be one of that project's trusted domains
+const LIVE_ORIGIN = process.env.TANDEM_TEST_PUBLIC_URL || 'http://127.0.0.1:3290';
 let proc, owner, cookie;
 
 before(async () => {
@@ -168,10 +172,10 @@ test('declining, wrong PKCE verifier and tampered consent are all refused', asyn
 });
 
 test('Google sign-in starts through Neon Auth, and only members get in', async (t) => {
-  // Neon Auth only accepts this deployment's trusted origins, so this server presents itself as http://127.0.0.1:3290
+  // Neon Auth only accepts a deployment's trusted origins, so this server presents itself as one of them
   const nport = port + 600;
   const nbase = `http://127.0.0.1:${nport}`;
-  const p = spawn(process.execPath, [path.join(root, 'dist/server.js'), 'serve', '--port', String(nport), '--data', data, '--public-url', 'http://127.0.0.1:3290'], { stdio: 'ignore', env: { ...process.env, TANDEM_NEON_AUTH_URL: NEON, TANDEM_ALLOWED_EMAILS: 'Owner@Example.com' } });
+  const p = spawn(process.execPath, [path.join(root, 'dist/server.js'), 'serve', '--port', String(nport), '--data', data, '--public-url', LIVE_ORIGIN], { stdio: 'ignore', env: { ...process.env, TANDEM_NEON_AUTH_URL: NEON, TANDEM_ALLOWED_EMAILS: 'Owner@Example.com' } });
   t.after(() => p.kill());
   for (let i = 0; i < 50; i++) {
     try { if ((await fetch(`${nbase}/healthz`)).ok) break; } catch { /* starting */ }
@@ -179,12 +183,16 @@ test('Google sign-in starts through Neon Auth, and only members get in', async (
   }
   const r = await fetch(`${nbase}/auth/google?next=/`, { redirect: 'manual' });
   assert.equal(r.status, 303);
-  if (r.headers.get('location').startsWith('/login?error')) { t.skip('Neon Auth unreachable from here'); return; }
-  assert.ok(r.headers.get('location').startsWith(NEON), 'redirects to Neon Auth');
-  assert.match(r.headers.get('set-cookie'), /tandem_flow=.*HttpOnly/);
-  const cb = await fetch(`${nbase}/auth/neon/callback?neon_auth_session_verifier=x`, { redirect: 'manual', headers: { cookie: 'tandem_flow=forged' } });
-  assert.equal(cb.status, 303);
-  assert.match(cb.headers.get('location'), /^\/login\?error=This%20sign-in%20expired/);
+  if (LIVE_NEON && !r.headers.get('location').startsWith('/login?error')) {
+    assert.ok(r.headers.get('location').startsWith(NEON), 'redirects to Neon Auth');
+    assert.match(r.headers.get('set-cookie'), /tandem_flow=.*HttpOnly/);
+    const cb = await fetch(`${nbase}/auth/neon/callback?neon_auth_session_verifier=x`, { redirect: 'manual', headers: { cookie: 'tandem_flow=forged' } });
+    assert.equal(cb.status, 303);
+    assert.match(cb.headers.get('location'), /^\/login\?error=This%20sign-in%20expired/);
+  } else {
+    t.diagnostic(LIVE_NEON ? 'Neon Auth unreachable from here; live round trip not checked' : 'set TANDEM_TEST_NEON_AUTH_URL to check the live Google sign-in round trip');
+    assert.match(r.headers.get('location'), /^\/login\?error=Google%20sign-in/);
+  }
 
   // an origin Neon does not trust is refused, and people land back on the login page with a message
   const refused = await fetch(`${base}/auth/google?next=/`, { redirect: 'manual' });
