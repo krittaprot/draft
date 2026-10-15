@@ -55,15 +55,16 @@ const r = Math.round((Math.SQRT2 * t) / (Math.SQRT2 - 1));
 const tw = x1 - x0 + 1, th = y1 - y0 + 1, inset = 3;
 
 // 824px tile on a 1024px canvas, like macOS app icons, nudged up to leave room for the shadow
-const size = 1024, scale = 824 / Math.max(tw, th);
-const dw = tw * scale, dh = th * scale, dx = (size - dw) / 2, dy = (size - dh) / 2 - 10;
+// Normalize small width/height differences in generated artwork to a square Dock tile.
+const size = 1024, dw = 824, dh = 824, sx = dw / tw, sy = dh / th;
+const dx = (size - dw) / 2, dy = (size - dh) / 2 - 10;
 const href = `data:image/png;base64,${src.toString('base64')}`;
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">
   <defs>
     <clipPath id="tile"><rect x="${x0 + inset}" y="${y0 + inset}" width="${tw - inset * 2}" height="${th - inset * 2}" rx="${r - inset}"/></clipPath>
     <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#0b1530" flood-opacity="0.32"/></filter>
   </defs>
-  <g filter="url(#shadow)"><g transform="translate(${dx - x0 * scale} ${dy - y0 * scale}) scale(${scale})">
+  <g filter="url(#shadow)"><g transform="translate(${dx - x0 * sx} ${dy - y0 * sy}) scale(${sx} ${sy})">
     <image href="${href}" width="${w}" height="${h}" clip-path="url(#tile)"/>
   </g></g>
 </svg>`;
