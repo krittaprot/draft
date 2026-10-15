@@ -102,7 +102,8 @@ export function createHttpServer(engine: Engine, opts: { trustProxy: boolean; ne
     return loop && !req.headers['cf-connecting-ip'] && !req.headers['cf-ray'] && !req.headers['x-forwarded-for'] && !req.headers['x-forwarded-host'];
   };
   const tokenLoginOk = (req: http.IncomingMessage) => (opts.tokenLogin ?? 'on') === 'on' || (opts.tokenLogin === 'local' && directLocal(req));
-  const secure = (req: http.IncomingMessage) => req.headers['x-forwarded-proto'] === 'https' || engine.publicUrl.startsWith('https:');
+  // Secure cookies only when this request really came over https (cloudflared sets x-forwarded-proto)
+  const secure = (req: http.IncomingMessage) => req.headers['x-forwarded-proto'] === 'https';
   const setSession = (req: http.IncomingMessage, res: http.ServerResponse, p: Principal) => {
     res.setHeader('set-cookie', `tandem_session=${auth.session(p)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 86400}${secure(req) ? '; Secure' : ''}`);
   };

@@ -7,7 +7,7 @@ source "$(dirname "$0")/_env.sh"
 [[ -e "$APP_HOME/current/dist/server.js" ]] || { echo "No release yet. Run scripts/deploy.sh first."; exit 1; }
 NODE=${TANDEM_NODE:-$(command -v node || true)}
 [[ -x "$NODE" ]] || { echo "Node not found. Set TANDEM_NODE in deploy/deploy.env."; exit 1; }
-NODE=$(cd "$(dirname "$NODE")" && pwd -P)/$(basename "$NODE")
+# keep the path as given: resolving symlinks would pin a versioned Homebrew Cellar path that breaks on upgrade
 PUBLIC_URL=${TANDEM_HOSTNAME:+https://$TANDEM_HOSTNAME}
 PUBLIC_URL=${PUBLIC_URL:-http://127.0.0.1:$TANDEM_PORT}
 mkdir -p "$LOGS" "$APP_HOME/data" "$AGENTS"
