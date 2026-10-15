@@ -29,7 +29,7 @@ done
 echo "Released $STAMP -> $REL"
 if loaded "$SERVER_LABEL"; then
   launchctl kickstart -k "gui/$(id -u)/$SERVER_LABEL"
-  sleep 1
+  for _ in $(seq 1 30); do curl -fsS "http://127.0.0.1:$TANDEM_PORT/healthz" >/dev/null 2>&1 && break; sleep 0.5; done
   curl -fsS "http://127.0.0.1:$TANDEM_PORT/healthz" && echo
 else
   echo "Server job $SERVER_LABEL is not installed. Install it with scripts/install-service.sh"
