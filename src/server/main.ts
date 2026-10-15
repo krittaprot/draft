@@ -190,13 +190,17 @@ function info() {
   console.log(`version     ${VERSION}\ndata        ${dataDir}\nlocal URL   ${localUrl}\npublic URL  ${publicUrl}\nowner token ${path.join(dataDir, 'owner-token')}`);
 }
 
-switch (pos[0]) {
-  case 'serve': await serve(); break;
-  case 'token': token(); break;
-  case 'member': member(); break;
-  case 'connect': connect(); break;
-  case 'stdio': await stdio(); break;
-  case 'info': info(); break;
-  case 'version': console.log(VERSION); break;
-  default: console.log(HELP);
+try {
+  switch (pos[0]) {
+    case 'serve': await serve(); break;
+    case 'token': token(); break;
+    case 'member': member(); break;
+    case 'connect': connect(); break;
+    case 'stdio': await stdio(); break;
+    case 'info': info(); break;
+    case 'version': console.log(VERSION); break;
+    default: console.log(HELP);
+  }
+} catch (e) {
+  die((e as Error).message);
 }
