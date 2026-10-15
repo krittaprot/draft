@@ -171,7 +171,7 @@ test('Google sign-in starts through Neon Auth, and only members get in', async (
   // Neon Auth only accepts this deployment's trusted origins, so this server presents itself as http://127.0.0.1:3290
   const nport = port + 600;
   const nbase = `http://127.0.0.1:${nport}`;
-  const p = spawn(process.execPath, [path.join(root, 'dist/server.js'), 'serve', '--port', String(nport), '--data', data, '--public-url', 'http://127.0.0.1:3290'], { stdio: 'ignore', env: { ...process.env, TANDEM_NEON_AUTH_URL: NEON } });
+  const p = spawn(process.execPath, [path.join(root, 'dist/server.js'), 'serve', '--port', String(nport), '--data', data, '--public-url', 'http://127.0.0.1:3290'], { stdio: 'ignore', env: { ...process.env, TANDEM_NEON_AUTH_URL: NEON, TANDEM_ALLOWED_EMAILS: 'Owner@Example.com' } });
   t.after(() => p.kill());
   for (let i = 0; i < 50; i++) {
     try { if ((await fetch(`${nbase}/healthz`)).ok) break; } catch { /* starting */ }
@@ -195,4 +195,36 @@ test('Google sign-in starts through Neon Auth, and only members get in', async (
   const list = await (await fetch(`${base}/api/members`, { headers: { authorization: `Bearer ${owner}` } })).json();
   assert.equal(list.google, true);
   assert.equal(list.members.length, 1);
+});
+
+test('only the allowed email can be a member, and token sign-in never works through the tunnel', async (t) => {
+  const nbase = `http://127.0.0.1:${port + 700}`;
+  const p = spawn(process.execPath, [path.join(root, 'dist/server.js'), 'serve', '--port', String(port + 700), '--data', data], { stdio: 'ignore', env: { ...process.env, TANDEM_NEON_AUTH_URL: NEON, TANDEM_ALLOWED_EMAILS: 'Owner@Example.com' } });
+  t.after(() => p.kill());
+  for (let i = 0; i < 50; i++) {
+    try { if ((await fetch(`${nbase}/healthz`)).ok) break; } catch { /* starting */ }
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  const add = (email) => fetch(`${nbase}/api/members`, { method: 'POST', headers: { authorization: `Bearer ${owner}`, 'content-type': 'application/json' }, body: JSON.stringify({ email, role: 'editor' }) });
+  const refused = await add('intruder@example.com');
+  assert.equal(refused.status, 400);
+  assert.match((await refused.json()).error, /not in this server's allowed emails/);
+  assert.equal((await (await add('owner@example.com')).json()).email, 'owner@example.com');
+
+  // a member added before the allowlist (person@example.com, by the other server) can no longer sign in
+  const sessions = await (await fetch(`${nbase}/api/members`, { headers: { authorization: `Bearer ${owner}` } })).json();
+  assert.ok(sessions.members.some((m) => m.email === 'person@example.com'));
+
+  // through cloudflared (cf-connecting-ip set) there is no token form and token posts are refused
+  const viaTunnel = { 'cf-connecting-ip': '203.0.113.9', 'cf-ray': 'abc' };
+  const page = await (await fetch(`${nbase}/login`, { headers: viaTunnel })).text();
+  assert.match(page, /Continue with Google/);
+  assert.doesNotMatch(page, /name="token"/);
+  const post = await fetch(`${nbase}/login`, { method: 'POST', headers: viaTunnel, body: new URLSearchParams({ token: owner }), redirect: 'manual' });
+  assert.equal(post.status, 403);
+  const app = await fetch(`${nbase}/auth?token=${owner}`, { headers: viaTunnel, redirect: 'manual' });
+  assert.equal(app.headers.get('location'), '/login');
+  // on the host itself the Mac app can still sign in with the owner token
+  const local = await fetch(`${nbase}/auth?token=${owner}`, { redirect: 'manual' });
+  assert.match(local.headers.get('set-cookie') ?? '', /tandem_session=/);
 });

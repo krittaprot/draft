@@ -20,7 +20,7 @@ This builds `~/Applications/Tandem.app` and the `tandem` command in `~/.local/bi
 
 ## Sign-in
 
-- **People** sign in with Google through [Neon Auth](https://neon.com/docs/auth/overview) when `TANDEM_NEON_AUTH_URL` is set (add your public URL as a trusted domain in Neon). Only emails you allow get in: `tandem member add you@example.com --role owner`, or the People list under Connect agent. Without Neon, people sign in with an access token.
+- **People** sign in with Google through [Neon Auth](https://neon.com/docs/auth/overview) when `TANDEM_NEON_AUTH_URL` is set (add your public URL as a trusted domain in Neon). Only emails you allow get in: `tandem member add you@example.com --role owner`, or the People list under Connect agent. Set `TANDEM_ALLOWED_EMAILS` to make that a hard limit no one can widen, not even with the owner token. With Google on, signing in to the editor with a token only works on the host itself (the Mac app), never through the tunnel (`TANDEM_TOKEN_LOGIN=on|local|off`). Turn off Neon's email/password sign-in so Google is the only way in: `npx neonctl neon-auth config email-password update --enabled false --disable-sign-up true`. Without Neon, people sign in with an access token.
 - **Apps with OAuth** (claude.ai and ChatGPT custom connectors, Cursor, MCP Inspector…) only need the URL `https://<host>/mcp`. Tandem follows the MCP authorization spec: discovery, dynamic client registration, authorization code with PKCE, and rotating refresh tokens. A signed-in person approves each app on a consent page, optionally view-only, and the app's changes carry its name. Disconnect apps under Connect agent.
 - **Coding agents** use named access tokens (below).
 

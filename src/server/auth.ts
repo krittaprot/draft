@@ -22,6 +22,8 @@ export class Auth {
   private data!: AuthFile;
   private mtime = 0;
   private failures = new Map<string, { count: number; until: number }>();
+  /** When set, only these emails can ever be members, whoever tries to add them. */
+  allowedEmails?: Set<string>;
   /** Set by the server when OAuth is enabled; checks tandem_at_ access tokens. */
   oauthVerify?: (token: string) => Principal | null;
 
@@ -90,6 +92,7 @@ export class Auth {
     this.refresh();
     const e = email.trim().toLowerCase();
     if (!EMAIL_RE.test(e)) throw new Error(`not an email address: ${email}`);
+    if (!this.emailAllowed(e)) throw new Error(`${e} is not in this server's allowed emails (TANDEM_ALLOWED_EMAILS)`);
     const list = (this.data.members ??= []);
     const existing = list.find((m) => m.email === e);
     const m: Member = { email: e, role, name: (name?.trim() || existing?.name || e.split('@')[0]).slice(0, 40), added: existing?.added ?? new Date().toISOString(), lastSeen: existing?.lastSeen };
@@ -110,11 +113,16 @@ export class Auth {
   /** The principal for a person who signed in with this (verified) email, or null if they are not a member. */
   memberLogin(email: string): Principal | null {
     this.refresh();
+    if (!this.emailAllowed(email)) return null;
     const m = this.data.members?.find((x) => x.email === email.toLowerCase());
     if (!m) return null;
     m.lastSeen = new Date().toISOString();
     this.save();
     return { name: m.name, role: m.role, email: m.email };
+  }
+
+  emailAllowed(email: string): boolean {
+    return !this.allowedEmails || this.allowedEmails.has(email.trim().toLowerCase());
   }
 
   /** Throttles guessing: 10 failures from one client blocks it for 10 minutes. */
@@ -174,7 +182,7 @@ export class Auth {
       return rec ? { name: rec.name, role: rec.role } : null;
     }
     if (s.startsWith('m:')) {
-      const m = this.data.members?.find((x) => x.email === s.slice(2));
+ const m = this.emailAllowed(s.slice(2)) ? this.data.members?.find((x) => x.email === s.slice(2)) : undefined;
       return m ? { name: m.name, role: m.role, email: m.email } : null;
     }
     return null;

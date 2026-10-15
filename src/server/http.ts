@@ -60,10 +60,12 @@ const PAGE = (title: string, body: string) => `<!doctype html><html><head><meta 
 
 const GOOGLE_ICON = '<svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4 7.1-10 7.1-17.5z"/><path fill="#FBBC05" d="M10.6 28.6A14.6 14.6 0 0 1 9.5 24c0-1.6.3-3.2.8-4.6l-7.9-6.1A24 24 0 0 0 0 24c0 3.9.9 7.5 2.7 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.5-5.8c-2.1 1.4-4.8 2.3-8.4 2.3-6.2 0-11.5-4.1-13.4-9.8l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>';
 
-const LOGIN_PAGE = (opts: { error?: string; next?: string; google?: boolean } = {}) => PAGE('Tandem · Sign in', `<form method="post" action="/login"><img src="/icon.png" width="56" height="56" alt=""><h1>Tandem</h1>
+const LOGIN_PAGE = (opts: { error?: string; next?: string; google?: boolean; tokens?: boolean } = {}) => PAGE('Tandem · Sign in', `<form method="post" action="/login"><img src="/icon.png" width="56" height="56" alt=""><h1>Tandem</h1>
 ${opts.error ? `<p class="error">${escHtml(opts.error)}</p>` : ''}
-${opts.google ? `<a class="google" href="/auth/google?next=${encodeURIComponent(opts.next ?? '/')}">${GOOGLE_ICON}<span>Continue with Google</span></a><div class="or"><span>or use an access token</span></div>` : '<p>Paste an access token. Run <code>tandem token create &lt;name&gt;</code> on the host to make one.</p>'}
-<input type="hidden" name="next" value="${escHtml(opts.next ?? '/')}"><input name="token" type="password" placeholder="tandem_…" autocomplete="current-password" ${opts.google ? '' : 'autofocus'} required><button>Sign in</button></form>`);
+${opts.google ? `<a class="google" href="/auth/google?next=${encodeURIComponent(opts.next ?? '/')}">${GOOGLE_ICON}<span>Continue with Google</span></a>` : ''}
+${opts.tokens ? `${opts.google ? '<div class="or"><span>or use an access token</span></div>' : '<p>Paste an access token. Run <code>tandem token create &lt;name&gt;</code> on the host to make one.</p>'}
+<input type="hidden" name="next" value="${escHtml(opts.next ?? '/')}"><input name="token" type="password" placeholder="tandem_…" autocomplete="current-password" ${opts.google ? '' : 'autofocus'} required><button>Sign in</button>` : ''}
+${!opts.tokens && !opts.google ? '<p>Sign-in is turned off on this server.</p>' : ''}</form>`);
 
 /** Only same-site paths may be used as a post-login destination. */
 function safeNext(n: string | null | undefined): string {
@@ -72,7 +74,7 @@ function safeNext(n: string | null | undefined): string {
 
 const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'GET, POST, OPTIONS', 'access-control-allow-headers': 'content-type, authorization, mcp-protocol-version', 'access-control-max-age': '86400' };
 
-export function createHttpServer(engine: Engine, opts: { trustProxy: boolean; neon?: NeonLogin }) {
+export function createHttpServer(engine: Engine, opts: { trustProxy: boolean; neon?: NeonLogin; tokenLogin?: 'on' | 'local' | 'off' }) {
   const { store, auth } = engine;
   const oauth = new OAuth(store.dir, engine.publicUrl);
   auth.oauthVerify = (t) => oauth.verifyAccess(t);
@@ -93,6 +95,13 @@ export function createHttpServer(engine: Engine, opts: { trustProxy: boolean; ne
     if (opts.trustProxy && local) return String(req.headers['cf-connecting-ip'] ?? req.headers['x-forwarded-for'] ?? sock).split(',')[0].trim();
     return sock;
   };
+  /** A request made on this machine itself, not relayed by cloudflared or another proxy. */
+  const directLocal = (req: http.IncomingMessage) => {
+    const sock = req.socket.remoteAddress ?? '';
+    const loop = sock === '127.0.0.1' || sock === '::1' || sock === '::ffff:127.0.0.1';
+    return loop && !req.headers['cf-connecting-ip'] && !req.headers['cf-ray'] && !req.headers['x-forwarded-for'] && !req.headers['x-forwarded-host'];
+  };
+  const tokenLoginOk = (req: http.IncomingMessage) => (opts.tokenLogin ?? 'on') === 'on' || (opts.tokenLogin === 'local' && directLocal(req));
   const secure = (req: http.IncomingMessage) => req.headers['x-forwarded-proto'] === 'https' || engine.publicUrl.startsWith('https:');
   const setSession = (req: http.IncomingMessage, res: http.ServerResponse, p: Principal) => {
     res.setHeader('set-cookie', `tandem_session=${auth.session(p)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 86400}${secure(req) ? '; Secure' : ''}`);
@@ -241,7 +250,7 @@ export function createHttpServer(engine: Engine, opts: { trustProxy: boolean; ne
       if (method === 'POST') {
         const b = await readJson(req);
         const role = (['editor', 'viewer', 'owner'] as Role[]).includes(b.role as Role) ? (b.role as Role) : 'editor';
-        return json(auth.addMember(String(b.email ?? ''), role, b.name ? String(b.name) : undefined));
+        try { return json(auth.addMember(String(b.email ?? ''), role, b.name ? String(b.name) : undefined)); } catch (e) { throw new HttpError(400, (e as Error).message); }
       }
       if (method === 'DELETE' && parts[1]) { auth.removeMember(decodeURIComponent(parts[1])); return json({ ok: true }); }
     }
@@ -350,17 +359,19 @@ export function createHttpServer(engine: Engine, opts: { trustProxy: boolean; ne
 
       if (pth === '/login') {
         const google = !!opts.neon;
+        const tokens = tokenLoginOk(req);
         if (req.method === 'POST') {
+          if (!tokens) return send(res, 403, LOGIN_PAGE({ error: 'Signing in with a token is only allowed on the host itself. Use Google.', google }), 'text/html');
           const form = new URLSearchParams((await readBody(req)).toString('utf8'));
           const next = safeNext(form.get('next'));
           const tok = form.get('token') ?? '';
           const p = tok.startsWith('tandem_at_') ? null : auth.verify(tok, clientIp(req));
-          if (!p) return send(res, 401, LOGIN_PAGE({ error: auth.blocked(clientIp(req)) ? 'Too many attempts. Try again in 10 minutes.' : 'That token is not valid.', next, google }), 'text/html');
+          if (!p) return send(res, 401, LOGIN_PAGE({ error: auth.blocked(clientIp(req)) ? 'Too many attempts. Try again in 10 minutes.' : 'That token is not valid.', next, google, tokens }), 'text/html');
           setSession(req, res, p);
           res.writeHead(303, { location: next }).end();
           return;
         }
-        return send(res, 200, LOGIN_PAGE({ next: safeNext(url.searchParams.get('next')), google, error: url.searchParams.get('error') ?? undefined }), 'text/html');
+        return send(res, 200, LOGIN_PAGE({ next: safeNext(url.searchParams.get('next')), google, tokens, error: url.searchParams.get('error') ?? undefined }), 'text/html');
       }
 
       if (pth === '/auth/google' && opts.neon) {
@@ -380,7 +391,7 @@ export function createHttpServer(engine: Engine, opts: { trustProxy: boolean; ne
         let result;
         try { result = await opts.neon.finish(cookies(req).tandem_flow, url.searchParams.get('neon_auth_session_verifier')); } catch (e) { back((e as Error).message); return; }
         const p = auth.memberLogin(result.user.email);
-        if (!p) { back(`${result.user.email} is not a member of this Tandem. Ask the owner to add you.`, result.next); return; }
+        if (!p) { back(`${result.user.email} can't sign in to this Tandem.`, result.next); return; }
         res.setHeader('set-cookie', [clear]);
         setSession(req, res, p);
         res.writeHead(303, { location: result.next }).end();
@@ -394,6 +405,7 @@ export function createHttpServer(engine: Engine, opts: { trustProxy: boolean; ne
 
       if (pth === '/auth') {
         // used by the Mac app to sign in with the local owner token
+        if (!tokenLoginOk(req)) { res.writeHead(303, { location: '/login' }).end(); return; }
         const p = auth.verify(url.searchParams.get('token') ?? '', clientIp(req));
         if (!p) { res.writeHead(303, { location: '/login' }).end(); return; }
         setSession(req, res, p);

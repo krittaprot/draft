@@ -32,6 +32,8 @@ cat > "$PLIST" <<PLIST
 		<key>TANDEM_DATA</key><string>$APP_HOME/data</string>
 		<key>TANDEM_PUBLIC_URL</key><string>$PUBLIC_URL</string>
 		<key>TANDEM_NEON_AUTH_URL</key><string>${TANDEM_NEON_AUTH_URL:-}</string>
+		<key>TANDEM_ALLOWED_EMAILS</key><string>${TANDEM_ALLOWED_EMAILS:-}</string>
+		<key>TANDEM_TOKEN_LOGIN</key><string>${TANDEM_TOKEN_LOGIN:-}</string>
 	</dict>
 	<key>WorkingDirectory</key><string>$APP_HOME</string>
 	<key>RunAtLoad</key><true/>

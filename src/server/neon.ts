@@ -46,6 +46,7 @@ export class NeonLogin {
     const body = (await res.json().catch(() => null)) as { user?: { email?: unknown; name?: unknown; emailVerified?: unknown } } | null;
     const u = body?.user;
     if (!res.ok || !u || typeof u.email !== 'string' || !u.email) throw new Error('Neon Auth did not confirm the sign-in.');
+    if (u.emailVerified !== true) throw new Error('That account’s email address is not verified.');
     return { user: { email: u.email.toLowerCase(), name: typeof u.name === 'string' ? u.name : '', emailVerified: u.emailVerified === true }, next: flow.next };
   }
 }

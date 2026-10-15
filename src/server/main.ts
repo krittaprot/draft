@@ -26,7 +26,10 @@ Usage:
   tandem info
 
 Environment: TANDEM_PORT, TANDEM_HOST, TANDEM_DATA, TANDEM_PUBLIC_URL, TANDEM_TOKEN,
-TANDEM_NEON_AUTH_URL (enables "Continue with Google" for members, via Neon Auth).
+TANDEM_NEON_AUTH_URL (enables "Continue with Google" for members, via Neon Auth),
+TANDEM_ALLOWED_EMAILS (comma list; no other email can ever sign in),
+TANDEM_TOKEN_LOGIN = on | local | off (browser sign-in with an access token; default "local"
+when Google sign-in is on, i.e. only on the host itself, never through the tunnel).
 Data defaults to ~/.local/share/tandem/data.`;
 
 function args(argv: string[]) {
@@ -48,6 +51,7 @@ const port = Number(flags.port ?? process.env.TANDEM_PORT ?? 3290);
 const host = flags.host ?? process.env.TANDEM_HOST ?? '127.0.0.1';
 const localUrl = `http://${host === '0.0.0.0' ? '127.0.0.1' : host}:${port}`;
 const publicUrl = (flags['public-url'] ?? process.env.TANDEM_PUBLIC_URL ?? localUrl).replace(/\/+$/, '');
+const allowedEmails = (flags['allowed-emails'] ?? process.env.TANDEM_ALLOWED_EMAILS ?? '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
 const credFile = path.join(os.homedir(), '.config/tandem/credentials.json');
 
 function die(msg: string): never {
@@ -76,14 +80,16 @@ async function serve() {
   fs.mkdirSync(dataDir, { recursive: true });
   const store = new Store(dataDir);
   const auth = new Auth(dataDir);
+  if (allowedEmails.length) auth.allowedEmails = new Set(allowedEmails);
   const owner = auth.ensureOwner();
   const engine = new Engine(store, auth, publicUrl);
   const neonUrl = flags['neon-auth-url'] ?? process.env.TANDEM_NEON_AUTH_URL;
   const neon = neonUrl ? new NeonLogin(neonUrl, publicUrl) : undefined;
-  const server = createHttpServer(engine, { trustProxy: true, neon });
+  const tokenLogin = (flags['token-login'] ?? process.env.TANDEM_TOKEN_LOGIN ?? (neon ? 'local' : 'on')) as 'on' | 'local' | 'off';
+  const server = createHttpServer(engine, { trustProxy: true, neon, tokenLogin });
   server.listen(port, host, () => {
     console.log(`Tandem ${VERSION} listening on ${localUrl} (public URL ${publicUrl}), data in ${dataDir}`);
-    if (neon) console.log(`Google sign-in via Neon Auth is on; ${auth.members().length} member(s) allowed (tandem member add <email>)`);
+    if (neon) console.log(`Google sign-in via Neon Auth is on; ${auth.members().length} member(s)${allowedEmails.length ? `, limited to ${allowedEmails.join(', ')}` : ''}; browser sign-in with tokens: ${tokenLogin}`);
     if (owner) console.log(`Created the owner token (shown once, also saved to ${path.join(dataDir, 'owner-token')}):\n  ${owner}`);
   });
   const stop = () => { server.close(); process.exit(0); };
@@ -163,6 +169,7 @@ async function stdio() {
 
 function member() {
   const auth = new Auth((fs.mkdirSync(dataDir, { recursive: true }), dataDir));
+  if (allowedEmails.length) auth.allowedEmails = new Set(allowedEmails);
   const [, sub, email] = pos;
   if (sub === 'add') {
     if (!email) die('usage: tandem member add <email> [--role editor|viewer|owner] [--name NAME]');
