@@ -14,7 +14,7 @@ CERT="$HOME/.cloudflared/cert-$ZONE.pem"
 [[ -f "$CERT" ]] || CERT="$HOME/.cloudflared/cert.pem"
 export TUNNEL_ORIGIN_CERT="$CERT"
 
-ID=$("$CF" tunnel list --output json 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const t=JSON.parse(s||'[]').find(t=>t.name===process.argv[1]&&!t.deleted_at);console.log(t?t.id:'')})" "$TANDEM_TUNNEL")
+ID=$("$CF" tunnel list --output json 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const t=JSON.parse(s||'[]').find(t=>t.name===process.argv[1]&&(!t.deleted_at||t.deleted_at.startsWith('0001-')));console.log(t?t.id:'')})" "$TANDEM_TUNNEL")
 if [[ -z "$ID" ]]; then
   "$CF" tunnel create "$TANDEM_TUNNEL"
   ID=$("$CF" tunnel list --output json | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log(JSON.parse(s).find(t=>t.name===process.argv[1]).id))" "$TANDEM_TUNNEL")
@@ -58,6 +58,10 @@ cat > "$PLIST" <<PLIST
 </plist>
 PLIST
 loaded "$TUNNEL_LABEL" && launchctl bootout "gui/$(id -u)/$TUNNEL_LABEL" || true
-launchctl bootstrap "gui/$(id -u)" "$PLIST"
+for attempt in 1 2 3 4 5; do
+  launchctl bootstrap "gui/$(id -u)" "$PLIST" && break
+  [[ $attempt -lt 5 ]] || exit 1
+  sleep 1
+done
 echo "Tunnel $TANDEM_TUNNEL ($ID) -> https://$HOST. Check: curl https://$HOST/healthz"
 echo "If TANDEM_PUBLIC_URL changed, re-run scripts/install-service.sh so share links use https://$HOST."

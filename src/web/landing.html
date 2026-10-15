@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Draft — the self-hosted design canvas for you and your agents</title>
+  <title>Draft — a drawboard for your agent, via MCP or CLI</title>
   <meta name="description" content="Open-source design canvas you host on your own machine. Claude Code, Codex and opencode draw on it through MCP; you watch changes land live, edit by hand and review with comments.">
   <meta name="theme-color" content="#f5f7fb">
   <link rel="manifest" href="/manifest.webmanifest">
@@ -22,7 +22,7 @@
       <div class="nav__links">
         <a href="#how">How it works</a>
         <a href="#self-host">Self-host</a>
-        <a href="https://github.com/krittaprot/tandem">GitHub</a>
+        <a href="https://github.com/krittaprot/draft">GitHub</a>
       </div>
       <a class="btn btn--primary btn--small" href="/login">Sign in</a>
     </nav>
@@ -33,7 +33,7 @@
       <div class="hero__grid">
         <h1>Your agents design. <span class="you">You direct.</span></h1>
         <div>
-          <p class="lede">Draft is an open-source design canvas you run on your own machine. Claude Code, Codex and opencode draw on it through MCP. You watch each change land, edit any layer by hand, and leave comments the agent reads back.</p>
+          <p class="lede">Draft is a drawboard for your agent. Claude Code, Codex and opencode draw through MCP or CLI. Watch each change land, edit any layer by hand, and leave comments your agent reads back. Self-hosted and open source.</p>
           <div class="actions">
             <a class="btn btn--primary" href="#self-host">Host your own</a>
             <a class="btn btn--ghost" href="/login">Sign in</a>
@@ -88,9 +88,9 @@
           <p>On the machine running Draft, one command registers it with your coding agent and gives that agent its own key, so its name appears on every change it makes.</p>
           <div class="code">
             <span class="code__label">terminal</span>
-<pre>tandem connect claude     <span class="c"># Claude Code</span>
-tandem connect codex      <span class="c"># Codex</span>
-tandem connect opencode   <span class="c"># opencode</span></pre>
+<pre>draft connect claude     <span class="c"># Claude Code</span>
+draft connect codex      <span class="c"># Codex</span>
+draft connect opencode   <span class="c"># opencode</span></pre>
           </div>
           <p class="after-code">For claude.ai, ChatGPT or Cursor, add a custom connector with this address. The app asks you to approve it once, and you can make it view-only.</p>
           <div class="code">
@@ -112,11 +112,11 @@ tandem connect opencode   <span class="c"># opencode</span></pre>
           <p>Draft is one small Node.js server. Run it on your laptop while you work, or on an always-on Mac and reach it from anywhere through your own domain. Your designs stay on your disk.</p>
           <div class="code">
             <span class="code__label">terminal · needs Node.js 20+ and pnpm</span>
-<pre>git clone https://github.com/krittaprot/tandem
-cd tandem && pnpm install && pnpm build
+<pre>git clone https://github.com/krittaprot/draft
+cd draft && pnpm install --frozen-lockfile && pnpm build
 node dist/server.js serve   <span class="c"># http://127.0.0.1:3290</span></pre>
           </div>
-          <p class="after-code">The first run prints where your owner key is saved; sign in with it, then connect your agents. The <a href="https://github.com/krittaprot/tandem#readme">README</a> covers the Mac app, running it as a service, and putting it on your own domain.</p>
+          <p class="after-code">The first run prints where your owner key is saved; sign in with it, then connect your agents. The <a href="https://github.com/krittaprot/draft#readme">README</a> covers MCP, CLI drawing, the Mac app, and self-hosting on your own domain.</p>
         </div>
         <dl class="spec">
           <dt>Licence</dt><dd>MIT. Read it, fork it, host it.</dd>
@@ -132,7 +132,7 @@ node dist/server.js serve   <span class="c"># http://127.0.0.1:3290</span></pre>
     <section class="wrap">
       <div class="closing">
         <p>Give your agents a canvas. Keep the final say.</p>
-        <a class="btn btn--primary" href="https://github.com/krittaprot/tandem">Get it on GitHub</a>
+        <a class="btn btn--primary" href="https://github.com/krittaprot/draft">Get it on GitHub</a>
       </div>
     </section>
   </main>
@@ -140,7 +140,7 @@ node dist/server.js serve   <span class="c"># http://127.0.0.1:3290</span></pre>
   <footer class="wrap footer">
     <a class="wordmark" href="/"><img src="/icons/icon-192.png" alt="" width="26" height="26">draft</a>
     <span>Self-hosted design canvas for people and agents. MIT licence.</span>
-    <a href="https://github.com/krittaprot/tandem">GitHub</a>
+    <a href="https://github.com/krittaprot/draft">GitHub</a>
     <a href="/login">Sign in</a>
   </footer>
   <script src="/pwa.js" defer></script>

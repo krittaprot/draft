@@ -47,7 +47,11 @@ cat > "$PLIST" <<PLIST
 PLIST
 
 loaded "$SERVER_LABEL" && launchctl bootout "gui/$(id -u)/$SERVER_LABEL" || true
-launchctl bootstrap "gui/$(id -u)" "$PLIST"
+for attempt in 1 2 3 4 5; do
+  launchctl bootstrap "gui/$(id -u)" "$PLIST" && break
+  [[ $attempt -lt 5 ]] || exit 1
+  sleep 1
+done
 for _ in $(seq 1 30); do curl -fsS "http://127.0.0.1:$TANDEM_PORT/healthz" >/dev/null 2>&1 && break; sleep 0.5; done
 curl -fsS "http://127.0.0.1:$TANDEM_PORT/healthz" && echo
 echo "Installed $SERVER_LABEL with $NODE, public URL $PUBLIC_URL"

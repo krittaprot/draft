@@ -372,7 +372,7 @@ export function createHttpServer(engine: Engine, opts: { trustProxy: boolean; ne
     const url = new URL(req.url ?? '/', 'http://localhost');
     try {
       const pth = url.pathname;
-      if (pth === '/healthz') return send(res, 200, { ok: true, name: 'tandem', version: VERSION });
+      if (pth === '/healthz') return send(res, 200, { ok: true, name: 'draft', version: VERSION });
       if (pth === '/mcp' || pth === '/mcp/') return await handleMcp(req, res);
       if (pth.startsWith('/api/')) return await handleApi(req, res, url);
 

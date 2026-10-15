@@ -1,8 +1,10 @@
-# AGENTS.md: working on Draft (formerly Tandem)
+# AGENTS.md: working on Draft
 
-The product is named Draft. Compatibility identifiers (`tandem` CLI, environment
-variables, data paths, bundle ID, repository and hostname) retain their existing
-names. The Mac build is `build/Draft.app`, with `build/Tandem.app` as a compatibility symlink.
+Market the product as **Draft — a drawboard for your agent, via MCP or CLI**.
+Repository: https://github.com/krittaprot/draft. Live: https://draft.krittaprot.com;
+MCP: `/mcp`. Public configuration uses `DRAFT_*`; the CLI is `draft`.
+Existing installations retain compatibility aliases and storage paths so upgrades
+preserve their data. The Mac build is `build/Draft.app`.
 
 Read by Codex, opencode and other coding agents. Start here, then read `README.md` for the
 user-facing story. If `deploy/OPERATOR.md` exists, read it too: it describes the live

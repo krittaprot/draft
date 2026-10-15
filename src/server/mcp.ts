@@ -30,7 +30,7 @@ const messageArg = z.string().max(300).optional().describe('short description of
 const previewArg = z.boolean().optional().describe('return a screenshot of the affected top-level frame after the change (default false)');
 
 export function buildMcpServer(engine: Engine, who: Principal): McpServer {
-  const server = new McpServer({ name: 'tandem', version: VERSION }, { instructions: INSTRUCTIONS });
+  const server = new McpServer({ name: 'draft', version: VERSION }, { instructions: INSTRUCTIONS });
   const canWrite = who.role !== 'viewer';
   const store = engine.store;
 

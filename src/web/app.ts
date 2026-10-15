@@ -812,7 +812,7 @@ async function openConnect() {
     <pre class="cmd">${esc(base)}/mcp</pre>
     ${apps.length ? `<table class="tokens">${apps.map((a) => `<tr><td><b>${esc(a.app)}</b> <span class="meta">as ${esc(a.name)}</span></td><td>${a.role}</td><td class="meta">${a.lastUsed ? 'used ' + ago(a.lastUsed) : 'not used yet'} · approved by ${esc(a.approvedBy)}</td><td><button class="btn small ghost danger" data-revoke-app="${esc(a.id)}">Disconnect</button></td></tr>`).join('')}</table>` : ''}
     <h3>Coding agents on the Draft host (one command each)</h3>
-    <pre class="cmd">tandem connect claude\ntandem connect codex\ntandem connect opencode</pre>
+    <pre class="cmd">draft connect claude\ndraft connect codex\ndraft connect opencode</pre>
     <h3>Coding agents elsewhere</h3>
     ${owner ? `<p>Create a token for each agent; its name shows on every change it makes.</p><form id="new-token" class="row" style="justify-content:flex-start"><input name="name" placeholder="token name, e.g. claude-code" pattern="[a-z0-9][a-z0-9._-]{0,39}" required><select name="role"><option>editor</option><option>viewer</option></select><button class="btn primary">Create token</button></form><div id="token-out"></div>` : '<p>Ask the owner for a token.</p>'}
     <pre class="cmd" id="cmds">${esc(connectCommands(base, '<TOKEN>'))}</pre>
@@ -827,17 +827,17 @@ async function openConnect() {
 
 function connectCommands(base: string, tok: string) {
   return `# Claude Code
-claude mcp add --scope user --transport http tandem ${base}/mcp --header "Authorization: Bearer ${tok}"
+claude mcp add --scope user --transport http draft ${base}/mcp --header "Authorization: Bearer ${tok}"
 
 # Codex (token from the environment)
-export TANDEM_TOKEN=${tok}
-codex mcp add tandem --url ${base}/mcp --bearer-token-env-var TANDEM_TOKEN
+export DRAFT_TOKEN=${tok}
+codex mcp add draft --url ${base}/mcp --bearer-token-env-var DRAFT_TOKEN
 
 # opencode
-opencode mcp add --global tandem --url ${base}/mcp --header "Authorization=Bearer ${tok}"
+opencode mcp add --global draft --url ${base}/mcp --header "Authorization=Bearer ${tok}"
 
 # Any MCP client (JSON config)
-{ "mcpServers": { "tandem": { "type": "http", "url": "${base}/mcp", "headers": { "Authorization": "Bearer ${tok}" } } } }`;
+{ "mcpServers": { "draft": { "type": "http", "url": "${base}/mcp", "headers": { "Authorization": "Bearer ${tok}" } } } }`;
 }
 
 function connectEvents() {

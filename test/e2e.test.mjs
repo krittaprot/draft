@@ -54,6 +54,41 @@ test('rejects missing and wrong tokens', async () => {
   assert.equal((await fetch(`${base}/api/docs`)).status, 401);
 });
 
+test('CLI discovers tools, draws from JSON and stdin, and enforces permissions', async () => {
+  const run = (args, token = owner, input = '') => new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [path.join(root, 'bin/draft.js'), ...args, '--url', base], {
+      env: { ...process.env, DRAFT_TOKEN: token }, stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let stdout = '', stderr = '';
+    child.stdout.on('data', (s) => stdout += s);
+    child.stderr.on('data', (s) => stderr += s);
+    child.on('error', reject);
+    child.on('close', (code) => resolve({ code, stdout, stderr }));
+    child.stdin.end(input);
+  });
+  const tools = await run(['tools']);
+  assert.equal(tools.code, 0, tools.stderr);
+  assert.ok(JSON.parse(tools.stdout).tools.some((t) => t.name === 'create_nodes'));
+  const created = await run(['call', 'create_document', '{"name":"CLI board"}']);
+  assert.equal(created.code, 0, created.stderr);
+  const doc = /d_[a-z0-9]+/.exec(textOf(JSON.parse(created.stdout)))[0];
+  const drawn = await run(['call', 'create_nodes', '--file', '-'], owner, JSON.stringify({
+    document: doc, nodes: [{ type: 'frame', id: 'cli-frame', width: 100, height: 100, fill: '#123456' }],
+  }));
+  assert.equal(drawn.code, 0, drawn.stderr);
+  const c = await connect(owner);
+  const detail = await call(c, 'get_node', { document: doc, id: 'cli-frame' });
+  assert.match(textOf(detail), /#123456/);
+  const bad = await run(['call', 'create_nodes', '{"document":"missing","nodes":[]}']);
+  assert.notEqual(bad.code, 0);
+  const invalid = await run(['call', 'create_document', '[]']);
+  assert.notEqual(invalid.code, 0);
+  assert.match(invalid.stderr, /JSON object/);
+  const denied = await run(['tools'], 'invalid-key');
+  assert.notEqual(denied.code, 0);
+  await c.close();
+});
+
 test('agent designs a screen, sees it, and the history records it', async () => {
   const c = await connect(owner);
   const tools = (await c.listTools()).tools.map((t) => t.name);

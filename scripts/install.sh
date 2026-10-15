@@ -14,13 +14,14 @@ rm -rf "$HOME/Applications/Draft.app"
 cp -R build/Draft.app "$HOME/Applications/Draft.app"
 ln -s Draft.app "$HOME/Applications/Tandem.app"
 
-cat > "$HOME/.local/bin/tandem" <<'SH'
+cat > "$HOME/.local/bin/draft" <<'SH'
 #!/bin/sh
-exec node "$HOME/Applications/Tandem.app/Contents/Resources/server/dist/server.js" "$@"
+exec node "$HOME/Applications/Draft.app/Contents/Resources/server/dist/server.js" "$@"
 SH
-chmod +x "$HOME/.local/bin/tandem"
+chmod +x "$HOME/.local/bin/draft"
+ln -sf draft "$HOME/.local/bin/tandem"
 
 echo
-echo "Installed ~/Applications/Draft.app and ~/.local/bin/tandem"
-case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) echo "Add ~/.local/bin to your PATH to use the tandem command.";; esac
-echo "Next: open Draft.app, then connect agents with: tandem connect claude | codex | opencode"
+echo "Installed ~/Applications/Draft.app and ~/.local/bin/draft"
+case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) echo "Add ~/.local/bin to your PATH to use the draft command.";; esac
+echo "Next: open Draft.app, then connect agents with: draft connect claude | codex | opencode"

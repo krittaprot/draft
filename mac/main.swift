@@ -5,7 +5,8 @@ import AppKit
 import WebKit
 
 let defaultURL = "http://127.0.0.1:3290"
-let dataDir = NSString(string: "~/.local/share/tandem/data").expandingTildeInPath
+let legacyDataDir = NSString(string: "~/.local/share/tandem/data").expandingTildeInPath
+let dataDir = FileManager.default.fileExists(atPath: legacyDataDir + "/auth.json") ? legacyDataDir : NSString(string: "~/.local/share/draft/data").expandingTildeInPath
 
 final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate {
     var window: NSWindow!
@@ -65,7 +66,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         let sem = DispatchSemaphore(value: 0)
         var ok = false
         URLSession.shared.dataTask(with: req) { data, resp, _ in
-            ok = (resp as? HTTPURLResponse)?.statusCode == 200 && String(data: data ?? Data(), encoding: .utf8)?.contains("tandem") == true
+            let name = (try? JSONSerialization.jsonObject(with: data ?? Data())) as? [String: Any]
+            ok = (resp as? HTTPURLResponse)?.statusCode == 200 && ["draft", "tandem"].contains(name?["name"] as? String ?? "")
             sem.signal()
         }.resume()
         _ = sem.wait(timeout: .now() + 2)

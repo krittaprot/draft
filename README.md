@@ -1,159 +1,164 @@
-<p align="center"><img src="docs/tandem-icon-minimal.png" width="96" height="96" alt="Draft icon: a white cursor and cyan curve on a navy tile"></p>
+<p align="center"><img src="docs/draft-icon.png" width="96" height="96" alt="Draft icon"></p>
 
 <h1 align="center">Draft</h1>
 
-Formerly Tandem. Existing `tandem` commands, repository URL, server address and data paths remain compatible.
-
-<p align="center"><b>The self-hosted design canvas for you and your AI agents.</b><br>
-Claude Code, Codex, opencode or any MCP client designs on it. You watch it happen, edit by hand, and review every change.<br>
-Runs on your own machine. Your designs stay on your disk.</p>
+<p align="center"><b>A drawboard for your agent. MCP or CLI.</b><br>
+Let your agent draw screens, diagrams and ideas. Watch it work, move things around, and leave feedback on the board.<br>
+Self-hosted. Open source. Your designs stay on your disk.</p>
 
 <p align="center">
-<a href="https://github.com/krittaprot/tandem/actions/workflows/ci.yml"><img src="https://github.com/krittaprot/tandem/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+<a href="https://github.com/krittaprot/draft/actions/workflows/ci.yml"><img src="https://github.com/krittaprot/draft/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-1F5FD6" alt="MIT licence"></a>
 </p>
 
-![The Draft editor: an agent's latest change outlined in amber on a wallet app design, with the history panel listing revisions by codex and claude-code](src/web/shots/review.png)
+![An agent's changes on the Draft board, with comments and revision history](src/web/shots/review.png)
 
-## Why Draft
+## Draw together
 
-- **Agents get a real canvas.** Over MCP they create whole screens with frames and auto-layout. They take screenshots to check their own work, and share a link so you can see it in chat.
-- **You stay in charge.** Every agent edit lands live, outlined in amber with the agent's name. Edit any layer by hand, pin comments the agent reads and answers, and step back through history.
-- **It's yours.** Draft is one small Node.js server you run yourself: on a laptop while you work, or on an always-on Mac you reach from anywhere through your own domain. Designs are plain files on your disk, with every revision kept. MIT licensed.
+- **Give your agent a board.** Create frames, text, shapes, SVGs and images with auto-layout. Use MCP tools or call the same tools from the CLI.
+- **See what it made.** Agent edits appear live. Screenshots and share links let the agent check its work and show you the result.
+- **Make it yours.** Move and resize layers, adjust styles, and pin feedback directly to the design.
+- **Keep every version.** Each change records its author. Review the history or restore an earlier revision.
+- **Own your work.** A small Node.js server, files on your disk, and an MIT licence.
 
-Draft is a clean-room design inspired by the Figma mental model (frames, auto-layout, layers). It contains no Figma code.
+## Self-host locally
 
-## Self-host in a minute
-
-Needs Node.js 20 or newer and pnpm.
+Install **Node.js 20+**, **pnpm**, and **Git**, then run:
 
 ```bash
-git clone https://github.com/krittaprot/tandem
-cd tandem && pnpm install && pnpm build
-node dist/server.js serve
+git clone https://github.com/krittaprot/draft.git
+cd draft
+pnpm install --frozen-lockfile
+pnpm build
+node bin/draft.js serve --data "$HOME/.local/share/draft/data"
 ```
 
-Open http://127.0.0.1:3290.
-- The first run creates an owner key and prints where it's saved (`~/.local/share/tandem/data/owner-token`). Sign in with that key.
-- Then connect your agents (below).
-- Data lives in `~/.local/share/tandem/data`; change it with `--data DIR` or `TANDEM_DATA`.
-- `node dist/server.js --help` lists every command.
+Keep that terminal running and open **http://127.0.0.1:3290**.
 
-The web app installs like a native one: in Safari choose File → Add to Dock, and on iPhone use Share → Add to Home Screen.
+1. On first launch, Draft creates an owner key and prints its file path.
+2. In a second terminal, read it with `cat "$HOME/.local/share/draft/data/owner-token"` and use it to sign in. Keep this key private.
+3. Connect an agent through MCP or use the CLI below.
 
-### Mac app and the `tandem` command
+Stop the server with Ctrl+C. Restart it with the same command and data directory to reopen your boards.
+
+### Data and configuration
+
+New installations store data in `~/.local/share/draft/data`. Set `DRAFT_DATA` or use `--data DIR` to choose another location. Back up the entire data directory while the server is stopped; it includes designs, revisions, assets and access settings. Keep data outside the source checkout.
+
+Common options:
+
+```bash
+node bin/draft.js serve --port 3290 --data "$HOME/.local/share/draft/data"
+node bin/draft.js --help
+```
+
+The server binds to `127.0.0.1` by default. Local setup needs no domain, Google account or tunnel.
+
+### Mac app
+
+With Xcode Command Line Tools installed, run from the project root:
 
 ```bash
 ./scripts/install.sh
 ```
 
-This builds `~/Applications/Draft.app` and the `tandem` command in `~/.local/bin`. Nothing starts on its own. Open Draft.app:
-- It uses a Draft server already running at `http://127.0.0.1:3290`, or starts its bundled one while the app is open.
-- To point it at another server, such as an always-on Mac, use Draft → Settings….
+This installs `~/Applications/Draft.app` and the `draft` command in `~/.local/bin`. Add that directory to your `PATH` if needed. Open Draft to use a running local server, or let the app start its bundled server while it is open. Choose **Draft → Settings…** to connect to another server.
 
-## Connect agents
+The web app can also be installed through Safari's **File → Add to Dock**, or **Share → Add to Home Screen** on iPhone.
 
-On the machine running Draft, one command per agent creates a key named after it and registers the MCP server:
+## Connect through MCP
 
-```bash
-tandem connect claude      # Claude Code (user scope, HTTP + bearer header)
-tandem connect codex       # Codex (stdio bridge; key kept in ~/.config/tandem/credentials.json)
-tandem connect opencode    # opencode (global config, HTTP + header)
-```
-
-Without the installer, run `node dist/server.js connect …` from the repo instead.
-
-From anywhere else, create a key in the editor (Connect agent) or with `tandem token create <name>`, then:
+From the machine hosting Draft:
 
 ```bash
-claude mcp add --scope user --transport http tandem https://tandem.example.com/mcp --header "Authorization: Bearer <TOKEN>"
-opencode mcp add --global tandem --url https://tandem.example.com/mcp --header "Authorization=Bearer <TOKEN>"
-TANDEM_TOKEN=<TOKEN> codex mcp add tandem --url https://tandem.example.com/mcp --bearer-token-env-var TANDEM_TOKEN
+draft connect claude
+draft connect codex
+draft connect opencode
 ```
 
-- **Other MCP clients:** anything that speaks streamable HTTP works with `https://<host>/mcp` and an `Authorization: Bearer` header. For stdio-only clients, use `tandem stdio --url <server>`.
-- **Apps with sign-in** (claude.ai and ChatGPT custom connectors, Cursor, MCP Inspector…) only need the URL `https://<host>/mcp`.
-  - They connect with OAuth: you approve each app once on a consent page, optionally as view-only.
-  - Each app's changes carry its name.
-- **Keys:**
-  - `tandem token create <name> [--role editor|viewer|owner]`, `tandem token list`, `tandem token revoke <name>`.
-  - Viewers can read and take screenshots but can't change anything.
+Without the Mac installer, substitute `node bin/draft.js` for `draft`. Each command creates a named agent key and registers the MCP connection. Restart the agent to load its new tools.
 
-## What's inside
+For remote MCP clients, use **`https://your-host/mcp`**. Clients with OAuth sign in through the browser and request your approval. For bearer-token clients, create a named key with `draft token create my-agent` and use it as an Authorization bearer token. A `viewer` key can inspect designs and take screenshots without editing them.
 
-- **For agents (MCP at `/mcp`):**
-  - `create_nodes` builds whole screens from nested trees in one call.
-  - Editing: `update_nodes`, `move_nodes`, `duplicate_node`, `delete_nodes`, `manage_pages`.
-  - `screenshot` returns a PNG the agent can see, plus a share link (a PNG that opens without sign-in for 30 days) to show you in chat.
-  - `export` produces HTML/CSS with flexbox, or SVG. `upload_image` adds images.
-  - Comments: `list_comments`, `add_comment`, `reply_comment`, `resolve_comment`.
-  - History: `get_history`, `restore_revision`.
-  - Every change is a revision signed with the agent's name.
-- **For people (web editor, installable web app and Mac app):**
-  - An infinite canvas with pan and zoom.
-  - Select, move and resize, plus frame, rectangle, ellipse and text tools.
-  - A layers panel and an inspector for layout, auto-layout, fill, stroke, shadow and text.
-  - Comment pins.
-  - History that shows who changed what, with amber outlines, and lets you preview and restore old revisions.
-  - Live toasts when an agent edits.
-- **Node model:**
-  - frame: auto-layout row/column, gap, padding, align, justify, hug/fill sizing.
-  - rect, ellipse, image, path, and svg (for icons).
-  - text: wrapping, weights, Thai/CJK aware.
-  - Gradients, shadows, blur, and radius per corner.
+## Draw through the CLI
 
-## Put it online (always-on Mac + your own domain)
-
-Run Draft on a Mac that stays on, and reach it from anywhere through a Cloudflare Tunnel. No open ports needed.
-
-Copy `deploy/deploy.env.example` to `deploy/deploy.env` and set the label prefix, hostname and ports. Then:
+Use the same drawing tools from a shell or an agent with terminal access. In a second terminal, set a key for your own server:
 
 ```bash
-./scripts/deploy.sh            # test, build, publish a release to ~/.local/share/tandem/current
-./scripts/install-service.sh   # once: launchd job <label>.server (127.0.0.1 only, restarts on crash and at login)
-./scripts/setup-tunnel.sh      # once: Cloudflare tunnel + DNS for TANDEM_HOSTNAME + launchd job <label>.tunnel
+export DRAFT_TOKEN="$(cat "$HOME/.local/share/draft/data/owner-token")"
+
+# Discover tools and their JSON input schemas.
+draft tools
+
+# Create a board. Copy its returned document ID into the next command.
+draft call create_document '{"name":"My first board"}'
+draft call create_nodes '{"document":"d_REPLACE_ME","nodes":[{"type":"frame","name":"Hello","width":640,"height":400,"fill":"#0D1838","layout":"column","padding":48,"children":[{"type":"text","text":"Hello, Draft","fontSize":40,"color":"#ffffff"}]}]}'
+
+# Capture the board; the result includes a PNG share link.
+draft call screenshot '{"document":"d_REPLACE_ME"}'
 ```
 
-- **Updates:** after setup, `deploy.sh` alone ships updates and restarts the server job.
-- **Roll back:** point `current` at `previous`, then run `launchctl kickstart -k gui/$(id -u)/<label>.server`.
-- **Logs:** `~/Library/Logs/Tandem/`.
+Use `--url https://your-host` for a remote server. For larger inputs, use `draft call create_nodes --file nodes.json`, or pipe JSON into `draft call create_nodes --file -`. Output is JSON; a failed tool call exits nonzero. Use a named editor key instead of the owner key for ongoing agent work.
 
-### Sign-in when it's public
+## What agents can do
 
-- **People** sign in with Google through [Neon Auth](https://neon.com/docs/auth/overview) when `TANDEM_NEON_AUTH_URL` is set. Add your public URL as a trusted domain in Neon.
-  - Only emails you allow get in: run `tandem member add you@example.com --role owner`, or use the People list under Connect agent.
-  - Set `TANDEM_ALLOWED_EMAILS` to make that a hard limit nobody can widen, not even with the owner key.
-  - With Google on, signing in to the editor with a key only works on the host itself (the Mac app), never through the tunnel (`TANDEM_TOKEN_LOGIN=on|local|off`).
-  - Turn off Neon's email/password sign-in so Google is the only way in: `npx neonctl neon-auth config email-password update --enabled false --disable-sign-up true`.
-  - Without Neon, people sign in with an access key.
-- **Security model:**
-  - The server only listens on loopback, so cloudflared is the only way in.
-  - MCP and the API need a bearer key. Editor sign-in is rate-limited, uses an HttpOnly cookie and checks a CSRF header.
-  - Signed share links expose only one PNG.
-  - For an extra layer, put the editor behind Cloudflare Access and bypass `/mcp`, `/r/` and `/healthz`, so agents and share links keep working.
+Both MCP and CLI expose the same tools:
+
+- **Create and edit:** documents, frames, text, shapes, images, SVGs, auto-layout, gradients and shadows.
+- **Organize:** move, duplicate and delete nodes; manage pages.
+- **Inspect and share:** screenshots, node properties, document outlines, signed PNG links.
+- **Export:** SVG or HTML/CSS.
+- **Collaborate:** pin, read, reply to and resolve comments.
+- **Review:** inspect revision history and restore earlier versions.
+
+People get an infinite canvas, layers panel, style inspector, comment pins and live change highlights in the browser or Mac app.
+
+## Self-host on an always-on Mac
+
+For remote access, use a domain you control and Cloudflare Tunnel. Install `cloudflared`, sign in with `cloudflared tunnel login`, then copy `deploy/deploy.env.example` to `deploy/deploy.env` and set your hostname, service label and tunnel name.
+
+Run from the project root:
+
+```bash
+./scripts/deploy.sh
+./scripts/install-service.sh
+./scripts/setup-tunnel.sh
+```
+
+The scripts publish a release, install the server launch agent and configure the tunnel. The server stays on loopback; the tunnel provides public HTTPS. These launchd scripts are macOS-specific. On Linux, run the Node server under your own process manager and HTTPS reverse proxy, with a persistent data directory.
+
+- **Update:** pull the latest source, run `pnpm install --frozen-lockfile`, then `./scripts/deploy.sh`.
+- **Verify:** check `https://your-host/healthz`, sign in, and open an existing board.
+- **Rollback:** point the deployment's `current` symlink at its `previous` release, then restart `<your-label>.server` with launchctl.
+- **New deployments:** releases and data live under `~/.local/share/draft`; logs live under `~/Library/Logs/Draft`.
+
+### Sign-in for a public server
+
+Set `DRAFT_NEON_AUTH_URL` to your [Neon Auth](https://neon.com/docs/auth/overview) endpoint and add the public URL as a trusted domain. Configure Google sign-in in Neon, then allow members:
+
+```bash
+draft member add you@example.com --role owner
+```
+
+Set `DRAFT_ALLOWED_EMAILS` for a fixed email allowlist. With Google enabled, browser token login defaults to local-only; `DRAFT_TOKEN_LOGIN` accepts `on`, `local`, or `off`. Without Neon, sign in with an access key; explicitly set `DRAFT_TOKEN_LOGIN=on` if you want remote token sign-in.
+
+Treat owner keys as secrets. MCP and API calls require authentication; signed screenshot links are viewable by anyone who has the link until they expire. Back up your data before updates.
 
 ## Develop
 
 ```bash
-pnpm install
+pnpm install --frozen-lockfile
 pnpm typecheck
-pnpm test                       # builds, then end-to-end tests over real MCP clients
-node dist/server.js serve --port 3291 --data /tmp/tandem-dev
-./scripts/build-app.sh          # build/Draft.app (universal; bundles both resvg binaries)
+pnpm test
+node bin/draft.js serve --port 3299 --data /tmp/draft-dev
+./scripts/build-app.sh
 ```
 
-Layout:
-- `src/shared`: model, layout engine, text metrics and SVG renderer, shared by server and browser.
-- `src/server`: store, ops, auth, MCP tools, HTTP.
-- `src/web`: editor and homepage.
-- `mac/`: Swift wrapper.
-- `scripts/`: build, install, deploy.
+Use a scratch data directory for testing. `src/shared` contains the model and renderer; `src/server` contains storage, HTTP, MCP and CLI; `src/web` contains the editor and homepage; `mac` contains the native wrapper.
 
-[AGENTS.md](AGENTS.md) is the guide for coding agents and contributors. [CONTRIBUTING.md](CONTRIBUTING.md) explains how to send changes, and [SECURITY.md](SECURITY.md) how to report a vulnerability.
+See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and [AGENTS.md](AGENTS.md) for contribution and development guidance.
 
-Known limits:
-- Text measurement uses Helvetica metrics, so other fonts may wrap slightly differently.
-- Server screenshots use the fonts on the host, plus any `.ttf/.otf` dropped into `<data>/fonts`.
+Text measurement currently uses Helvetica metrics; server rendering uses installed fonts and any fonts added to `<data>/fonts`.
 
 ## Licence
 
