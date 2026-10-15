@@ -129,6 +129,10 @@ function zoomAt(factor: number, sx: number, sy: number) {
 const assetHref = (src: string) => (src.startsWith('data:image/') ? src : /^a_[a-f0-9]{64}\.\w+$/.test(src) ? `/assets/${src}` : null);
 
 function render() {
+  // hide what can't be used: viewers never edit, and nobody edits while previewing an old revision
+  document.body.classList.toggle('readonly', !canEdit());
+  document.body.classList.toggle('viewer', S.me?.role === 'viewer');
+  ($('#doc-name') as HTMLInputElement).readOnly = !canEdit();
   drawPages();
   drawLayers();
   drawCanvas();
@@ -271,7 +275,11 @@ function drawPanel() {
   if (S.tab === 'comments') p.innerHTML = commentsPanel();
   else if (S.tab === 'history') p.innerHTML = historyPanel();
   else p.innerHTML = designPanel();
-  if (!canEdit()) $$('#panel input, #panel select, #panel textarea').forEach((el) => ((el as HTMLInputElement).disabled = true));
+  if (!canEdit()) {
+    $$('#panel input:not([data-show-resolved]), #panel select, #panel textarea, #panel [data-set-layout], #panel [data-set-align]').forEach((el) => ((el as HTMLInputElement).disabled = true));
+    $$('#panel .edit-only, #panel label:has(> input[data-upload])').forEach((el) => el.remove());
+  }
+  if (S.me?.role === 'viewer') $$('#panel .comment-only').forEach((el) => el.remove());
 }
 
 function selected(): TandemNode[] {
@@ -302,7 +310,7 @@ function designPanel(): string {
       <div class="insp"><h3>Document</h3><div class="meta">id ${esc(S.doc.id)} · revision ${S.doc.rev}</div><div class="meta">Select a layer to edit it. Agents see the same document through MCP.</div></div>`;
   }
   if (nodes.length > 1) {
-    return `<div class="insp"><h3>${nodes.length} layers selected</h3><div class="actions"><button class="btn small" data-act="duplicate">Duplicate</button><button class="btn small danger" data-act="delete">Delete</button></div></div>`;
+    return `<div class="insp"><h3>${nodes.length} layers selected</h3><div class="actions"><button class="btn small edit-only" data-act="duplicate">Duplicate</button><button class="btn small danger edit-only" data-act="delete">Delete</button></div></div>`;
   }
   const n = nodes[0];
   const b = S.boxes.get(n.id) ?? { x: 0, y: 0, w: 0, h: 0 };
@@ -353,9 +361,9 @@ function designPanel(): string {
     ${sh ? `<div class="grid3">${num('shadow:x', 'X', sh.x ?? 0)}${num('shadow:y', 'Y', sh.y ?? 4)}${num('shadow:blur', 'B', sh.blur ?? 12)}</div>${colorField('shadow:color', 'Color', sh.color ?? 'rgba(0,0,0,0.15)', false)}` : ''}</div>`;
   h += `<div class="insp"><h3>Note</h3><textarea class="field-area" data-prop="note" data-kind="str" rows="2" placeholder="Design rationale or todo, visible to agents">${esc(n.note ?? '')}</textarea></div>`;
   h += `<div class="insp"><h3>Actions</h3><div class="actions">
-    <button class="btn small" data-act="duplicate">Duplicate</button><button class="btn small" data-act="forward">Bring forward</button><button class="btn small" data-act="backward">Send backward</button>
+    <button class="btn small edit-only" data-act="duplicate">Duplicate</button><button class="btn small edit-only" data-act="forward">Bring forward</button><button class="btn small edit-only" data-act="backward">Send backward</button>
     <button class="btn small" data-act="export-node">Export PNG</button><button class="btn small" data-act="copy-html">Copy HTML</button><button class="btn small" data-act="share-node">Copy share link</button>
-    <button class="btn small" data-act="comment-node">Comment</button><button class="btn small danger" data-act="delete">Delete</button></div></div>`;
+    <button class="btn small comment-only" data-act="comment-node">Comment</button><button class="btn small danger edit-only" data-act="delete">Delete</button></div></div>`;
   return h;
 }
 
@@ -370,7 +378,7 @@ function ago(iso: string) {
 function commentsPanel(): string {
   const list = S.comments.filter((c) => S.showResolved || !c.resolved).sort((a, b) => Number(a.resolved) - Number(b.resolved) || b.time.localeCompare(a.time));
   const idx = S.doc ? indexDoc(S.doc) : new Map();
-  return `<div class="panel-head"><span>Pick the comment tool (C) and click the canvas.</span><label class="check"><input type="checkbox" data-show-resolved ${S.showResolved ? 'checked' : ''}> Resolved</label></div>` +
+  return `<div class="panel-head"><span>${S.me?.role === 'viewer' ? 'Comments from people and agents.' : 'Pick the comment tool (C) and click the canvas.'}</span><label class="check"><input type="checkbox" data-show-resolved ${S.showResolved ? 'checked' : ''}> Resolved</label></div>` +
     (list.map((c) => {
       const target = c.nodeId ? (idx.get(c.nodeId)?.node as TandemNode | undefined) : undefined;
       return `<div class="thread ${c.resolved ? 'resolved' : ''}" data-thread="${esc(c.id)}">
@@ -600,7 +608,7 @@ function onPointerDown(e: PointerEvent) {
     return;
   }
   if (!canEdit() && S.tool !== 'select') return;
-  if (S.tool !== 'select') { S.drag = { kind: 'create', start: pp, rect: { x: pp.x, y: pp.y, w: 0, h: 0 } }; return; }
+  if (S.tool !== 'select') { S.drag = { kind: 'create', tool: S.tool, start: pp, rect: { x: pp.x, y: pp.y, w: 0, h: 0 } }; return; }
 
   const handle = tgt.getAttribute('data-handle');
   if (handle && S.sel.length === 1 && canEdit()) {
@@ -686,7 +694,9 @@ async function onPointerUp(e: PointerEvent) {
     await ops([{ op: 'update', id: n.id, props }], `Resized ${n.name ?? n.id}`);
   } else if (d.kind === 'create') {
     const r = d.rect as Box;
-    const tool = S.tool;
+    // the tool picked at pointerdown; S.tool may already be the next one the user chose
+    const tool = d.tool as Tool;
+    if (S.tool === tool) setTool('select');
     const small = r.w * S.zoom < 4 && r.h * S.zoom < 4;
     const defaults: Record<string, [number, number]> = { frame: [400, 300], rect: [100, 100], ellipse: [100, 100], text: [0, 0] };
     const [dw, dh] = defaults[tool] ?? [100, 100];
@@ -699,7 +709,6 @@ async function onPointerUp(e: PointerEvent) {
     else { node.width = Math.round(box.w); node.height = Math.round(box.h); }
     if (tool === 'frame') { node.fill = '#ffffff'; node.name = parent ? 'Frame' : `Frame ${page()!.children.filter((n) => n.type === 'frame').length + 1}`; }
     const res = await ops([{ op: 'create', parent: parent?.id ?? S.pageId, node }], `Added ${tool}`);
-    setTool('select');
     if (res?.created[0]) {
       selectNode(res.created[0]);
       if (tool === 'text') { const ta = $<HTMLTextAreaElement>('#panel textarea[data-prop="text"]'); ta?.focus(); ta?.select(); }
@@ -716,7 +725,8 @@ function onWheel(e: WheelEvent) {
 }
 
 function onDblClick(e: MouseEvent) {
-  const id = hitNode(e.target);
+  // the first click re-rendered the canvas, so e.target is stale; hit-test what is under the pointer now
+  const id = hitNode(document.elementFromPoint(e.clientX, e.clientY));
   if (!id || !S.doc) return;
   const n = indexDoc(S.doc).get(id)!.node;
   if (n.type === 'text') { selectNode(id); S.tab = 'design'; render(); const ta = $<HTMLTextAreaElement>('#panel textarea[data-prop="text"]'); ta?.focus(); ta?.select(); }
@@ -734,6 +744,7 @@ function openCommentPop(sx: number, sy: number, pp: { x: number; y: number }, no
 }
 
 function setTool(t: Tool) {
+  if (S.me?.role === 'viewer' && t !== 'select' && t !== 'hand') return;
   S.tool = t;
   $$('.tools button').forEach((b) => b.classList.toggle('active', b.dataset.tool === t));
   stage().setAttribute('class', `tool-${t}`);
@@ -753,13 +764,15 @@ function toast(html: string, error = false) {
 interface DocSummary { id: string; name: string; updated: string; rev: number; pages: { frames: unknown[] }[] }
 
 let homeTimer = 0;
-const homeOpen = () => !($('#home') as HTMLElement).hidden;
+const onHome = () => !new URLSearchParams(location.hash.slice(1)).get('doc');
 
 async function showHome() {
+  const docs = await api<DocSummary[]>('/api/docs');
+  // a design may have been opened while the list was loading; live refreshes must not cover it
+  if (!onHome()) return;
   ($('#home') as HTMLElement).hidden = false;
   document.title = 'Your designs · Tandem';
   ($('#home-new') as HTMLElement).hidden = S.me?.role === 'viewer';
-  const docs = await api<DocSummary[]>('/api/docs');
   ($('#home-empty') as HTMLElement).hidden = docs.length > 0;
   $('#home-grid').innerHTML = docs.map((d) => {
     const frames = d.pages.reduce((a, p) => a + p.frames.length, 0);
@@ -774,8 +787,10 @@ async function route() {
   const hash = new URLSearchParams(location.hash.slice(1));
   const docId = hash.get('doc');
   if (!docId) { await showHome(); return; }
+  clearTimeout(homeTimer);
   ($('#home') as HTMLElement).hidden = true;
   if (S.live?.id !== docId) { S.preview = null; S.sel = []; await loadDoc(docId); }
+  else { document.title = `${S.live.name} · Tandem`; render(); }
   const node = hash.get('node');
   if (node && S.doc && indexDoc(S.doc).has(node)) selectNode(node, true);
 }
@@ -832,7 +847,7 @@ function connectEvents() {
   es.onerror = () => { live.classList.remove('on'); $('#live-text').textContent = 'Reconnecting…'; };
   es.onmessage = async (m) => {
     const ev = JSON.parse(m.data) as { type: string; docId?: string; rev?: number; author?: string; message?: string; changed?: string[] };
-    if (homeOpen() && (ev.type === 'docs' || ev.type === 'doc')) { clearTimeout(homeTimer); homeTimer = window.setTimeout(() => void showHome(), 400); }
+    if (onHome() && (ev.type === 'docs' || ev.type === 'doc')) { clearTimeout(homeTimer); homeTimer = window.setTimeout(() => { if (onHome()) void showHome(); }, 400); }
     if (!S.doc) return;
     if (ev.type === 'comments' && ev.docId === S.live?.id) { await refreshComments(); return; }
     if (ev.type !== 'doc' || ev.docId !== S.live?.id || (S.live && ev.rev! <= S.live.rev)) return;
@@ -884,14 +899,24 @@ function onKey(e: KeyboardEvent) {
   if (tools[k]) setTool(tools[k]);
 }
 
+// Undo restores the revision before your latest change. That restore is itself a revision, so the
+// chain remembers where it stands: pressing Cmd+Z again steps further back instead of undoing the undo.
+const undoChain = { rev: -1, base: -1 }; // rev: the restore we made; base: the revision it restored
+
 async function undo() {
   if (!S.live || !canEdit()) return;
-  const last = S.history[0];
-  if (!last || last.rev === 0) return;
-  if (last.author !== S.me?.name) { toast(`The latest change is by <b>${esc(last.author)}</b>. Use History to restore an earlier version.`); return; }
-  await api(`/api/docs/${S.live.id}/restore`, { method: 'POST', json: { rev: last.rev - 1 } });
+  await loadHistory();
+  const latest = S.history[0];
+  if (!latest) return;
+  const cur = latest.rev === undoChain.rev ? undoChain.base : latest.rev;
+  const change = S.history.find((r) => r.rev === cur);
+  if (!change || cur === 0) { toast('Nothing left to undo.'); return; }
+  if (change.author !== S.me?.name) { toast(`The change before this is by <b>${esc(change.author)}</b>. Use History to restore an earlier version.`); return; }
+  const r = await api<{ rev: number }>(`/api/docs/${S.live.id}/restore`, { method: 'POST', json: { rev: cur - 1 } });
+  undoChain.rev = r.rev;
+  undoChain.base = cur - 1;
   await loadDoc(S.live.id);
-  toast(`Undid “${esc(last.message)}”`);
+  toast(`Undid “${esc(change.message)}”`);
 }
 
 // ---------------- wiring ----------------

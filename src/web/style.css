@@ -38,6 +38,9 @@ body:not(.login) {
 #topbar .group { display: flex; align-items: center; gap: 4px; min-width: 0; }
 #doc-name { border: 1px solid transparent; background: transparent; padding: 4px 6px; border-radius: var(--radius); font-weight: 600; width: 260px; }
 #doc-name:hover, #doc-name:focus { border-color: var(--line); outline: none; }
+.home-btn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px 0 8px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg); color: var(--text); font-weight: 600; white-space: nowrap; }
+.home-btn:hover { background: var(--bg-2); }
+.crumb-sep { color: var(--text-2); margin: 0 2px; }
 .tools button { width: 32px; height: 32px; border: 0; background: transparent; border-radius: var(--radius); display: grid; place-items: center; color: var(--text); }
 .tools button:hover { background: var(--bg-2); }
 .tools button.active { background: var(--accent); color: #fff; }
@@ -168,6 +171,17 @@ body.login .error { color: var(--danger); }
   body:not(.login) { grid-template-columns: 0 1fr 0; }
   #left, #right { display: none; }
   #doc-name { width: 140px; }
+  #live-text { display: none; }
+}
+@media (max-width: 640px) {
+  .home-btn span, .crumb-sep, #live, #zoom-btn, .tools .sep { display: none; }
+  .home-btn { padding: 0 7px; }
+  #doc-name { width: auto; min-width: 0; flex: 1 1 0; }
+  #topbar > .group:first-child { flex: 1 1 0; }
+  #connect-btn { display: none; }
+  #topbar { padding: 0 4px; gap: 4px; }
+  .tools button { width: 26px; }
+  #share-btn { padding: 5px 8px; }
 }
 
 body.login .google { display: flex; align-items: center; justify-content: center; gap: 10px; border: 1px solid var(--line); border-radius: 6px; padding: 9px; color: var(--text); text-decoration: none; font-weight: 600; background: var(--bg); }
@@ -208,3 +222,8 @@ a.btn { text-decoration: none; color: var(--text); }
 @media (hover: none) { .home-del { opacity: 1; } }
 .home-empty { text-align: left; max-width: 52ch; color: var(--text-2); }
 .home-empty h2 { color: var(--text); font-size: 16px; margin: 24px 0 4px; }
+
+/* read-only: viewers, and anyone previewing an old revision */
+body.readonly #add-page, body.viewer .tools [data-tool="frame"], body.viewer .tools [data-tool="rect"], body.viewer .tools [data-tool="ellipse"],
+body.viewer .tools [data-tool="text"], body.viewer .tools [data-tool="comment"], body.viewer .tools .sep { display: none; }
+body.readonly #doc-name:hover { border-color: transparent; }
