@@ -468,8 +468,15 @@ export function createHttpServer(engine: Engine, opts: { trustProxy: boolean; ne
 
       const pub = PUBLIC_FILE.exec(pth);
       if (pub && fs.existsSync(path.join(WEB_DIR, pth.slice(1)))) {
+        // ?v=<hash> URLs never change content, so they can be cached for good; everything else must revalidate,
+        // and the CDN must not hold a stale copy (CDN-Cache-Control applies to Cloudflare only)
+        const fixed = url.searchParams.has('v');
         const longLived = /^\/(fonts|icons|shots)\//.test(pth);
-        res.writeHead(200, { 'content-type': TYPES[pub[1]], 'cache-control': longLived ? 'public, max-age=86400' : 'no-cache', 'x-content-type-options': 'nosniff' });
+        res.writeHead(200, {
+          'content-type': TYPES[pub[1]], 'x-content-type-options': 'nosniff',
+          'cache-control': fixed ? 'public, max-age=31536000, immutable' : longLived ? 'public, max-age=86400' : 'no-cache',
+          ...(fixed || longLived ? {} : { 'cdn-cache-control': 'no-store' }),
+        });
         return res.end(fs.readFileSync(path.join(WEB_DIR, pth.slice(1))));
       }
       if (pth === '/offline.html') {

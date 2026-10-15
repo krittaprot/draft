@@ -212,3 +212,17 @@ test('home screen thumbnails: a picture for designs, nothing for empty ones', as
   assert.equal(r.headers.get('content-type'), 'image/png');
   assert.equal((await fetch(`${base}/api/docs/${full.id}/thumb.png`)).status, 401, 'needs sign-in');
 });
+
+test('pages load versioned scripts, so a release never runs a cached old app.js', async () => {
+  const login = await fetch(`${base}/login`, { method: 'POST', body: new URLSearchParams({ token: owner }), redirect: 'manual' });
+  const cookie = login.headers.get('set-cookie').split(';')[0];
+  const html = await (await fetch(`${base}/`, { headers: { cookie } })).text();
+  const js = /src="(\/app\.js\?v=[0-9a-f]{10})"/.exec(html)?.[1];
+  assert.ok(js, 'editor page references a versioned app.js');
+  const fixed = await fetch(`${base}${js}`);
+  assert.match(fixed.headers.get('cache-control'), /immutable/);
+  const plain = await fetch(`${base}/app.js`);
+  assert.equal(plain.headers.get('cache-control'), 'no-cache');
+  assert.equal(plain.headers.get('cdn-cache-control'), 'no-store');
+  assert.equal((await fetch(`${base}/sw.js`)).headers.get('cdn-cache-control'), 'no-store');
+});
