@@ -218,8 +218,8 @@ export class OAuth {
   }
 
   private issue(grant: Grant) {
-    const access = `tandem_at_${rand(32)}`;
-    const refresh = `tandem_rt_${rand(32)}`;
+    const access = `draft_at_${rand(32)}`;
+    const refresh = `draft_rt_${rand(32)}`;
     const now = Math.floor(Date.now() / 1000);
     grant.tokens.push({ hash: sha(access), kind: 'access', exp: now + ACCESS_TTL }, { hash: sha(refresh), kind: 'refresh', exp: now + REFRESH_TTL });
     grant.lastUsed = new Date().toISOString();

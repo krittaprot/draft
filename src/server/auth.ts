@@ -24,7 +24,7 @@ export class Auth {
   private failures = new Map<string, { count: number; until: number }>();
   /** When set, only these emails can ever be members, whoever tries to add them. */
   allowedEmails?: Set<string>;
-  /** Set by the server when OAuth is enabled; checks tandem_at_ access tokens. */
+  /** Set by the server when OAuth is enabled; accepts current and existing access tokens. */
   oauthVerify?: (token: string) => Principal | null;
 
   constructor(dataDir: string) {
@@ -69,7 +69,7 @@ export class Auth {
     this.refresh();
     if (!NAME_RE.test(name)) throw new Error('token name must be 1-40 lowercase letters, digits, ".", "_" or "-"');
     if (this.data.tokens.some((t) => t.name === name)) throw new Error(`a token named "${name}" already exists`);
-    const token = `tandem_${crypto.randomBytes(24).toString('base64url')}`;
+    const token = `draft_${crypto.randomBytes(24).toString('base64url')}`;
     this.data.tokens.push({ name, hash: sha(token), role, created: new Date().toISOString() });
     this.save();
     return token;
@@ -133,7 +133,7 @@ export class Auth {
 
   verify(token: string | undefined, client: string): Principal | null {
     if (!token || this.blocked(client)) return null;
-    if (token.startsWith('tandem_at_')) {
+    if (token.startsWith('draft_at_') || token.startsWith('tandem_at_')) {
       const p = this.oauthVerify?.(token) ?? null;
       if (!p) this.fail(client);
       return p;

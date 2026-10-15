@@ -40,6 +40,7 @@ before(async () => {
     await new Promise((r) => setTimeout(r, 100));
   }
   owner = fs.readFileSync(path.join(data, 'owner-token'), 'utf8').trim();
+  assert.match(owner, /^draft_/);
 });
 
 after(() => {

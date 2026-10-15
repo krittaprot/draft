@@ -101,7 +101,8 @@ test('an MCP client registers, gets approved by a person, and works under its ow
   assert.equal(location.searchParams.get('iss'), base);
   const t = new StreamableHTTPClientTransport(new URL(`${base}/mcp`), { authProvider: provider });
   await t.finishAuth(location.searchParams.get('code'));
-  assert.match(provider.tok.access_token, /^tandem_at_/);
+  assert.match(provider.tok.access_token, /^draft_at_/);
+  assert.match(provider.tok.refresh_token, /^draft_rt_/);
 
   const c = await connected(provider);
   const created = textOf(await c.callTool({ name: 'create_document', arguments: { name: 'From OAuth' } }));
@@ -132,7 +133,7 @@ test('refresh tokens rotate, and replaying an old one ends the approval', async 
   const first = provider.tok;
   const refresh = (rt) => fetch(`${base}/oauth/token`, { method: 'POST', body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: rt, client_id: provider.client.client_id }) }).then((r) => r.json());
   const second = await refresh(first.refresh_token);
-  assert.match(second.access_token, /^tandem_at_/);
+  assert.match(second.access_token, /^draft_at_/);
   assert.notEqual(second.refresh_token, first.refresh_token);
 
   // read-only approval: tools that change things are refused
