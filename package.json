@@ -1,0 +1,35 @@
+{
+  "name": "easel",
+  "version": "0.1.0",
+  "description": "Open-source design canvas that AI agents (Claude Code, Codex, opencode) drive over MCP, with a live editor for human edits and review.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "easel": "bin/easel.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node scripts/build.mjs && node --test test/*.test.mjs",
+    "start": "node dist/server.js serve"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "@resvg/resvg-js": "2.6.2",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "esbuild": "0.28.2",
+    "typescript": "^5.9.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "@resvg/resvg-js"
+    ]
+  }
+}
