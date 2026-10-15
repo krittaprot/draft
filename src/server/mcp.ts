@@ -10,7 +10,7 @@ import type { Comment } from './store.ts';
 
 export const VERSION = '0.1.0';
 
-const INSTRUCTIONS = `Tandem is a shared design canvas. You create and edit designs with these tools; people watch live and edit in the browser editor, and leave comments for you.
+const INSTRUCTIONS = `Draft is a shared design canvas. You create and edit designs with these tools; people watch live and edit in the browser editor, and leave comments for you.
 
 Workflow:
 1. list_documents, or create_document for new work. Each document has pages; top-level frames on a page are screens/artboards.
@@ -64,7 +64,7 @@ export function buildMcpServer(engine: Engine, who: Principal): McpServer {
   };
 
   server.registerTool('design_guide', {
-    title: 'Design guide', description: 'Explains the Tandem node model and the recommended workflow. Read once before designing.',
+    title: 'Design guide', description: 'Explains the Draft node model and the recommended workflow. Read once before designing.',
     inputSchema: {}, annotations: { readOnlyHint: true },
   }, guard(() => text(INSTRUCTIONS)));
 

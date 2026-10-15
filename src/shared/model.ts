@@ -65,7 +65,7 @@ export function pageOf(doc: TandemDoc, nodeId: string): Page | undefined {
 }
 
 /** Plain-language reference of the node model, shared by the MCP instructions and the guide tool. */
-export const MODEL_GUIDE = `Tandem document model (Figma-like):
+export const MODEL_GUIDE = `Draft document model (Figma-like):
 - document → pages → nodes. Top-level nodes on a page are usually frames ("artboards", e.g. a 1440x900 desktop screen or a 390x844 phone screen).
 - Node types: frame (container, the only type with children), rect, ellipse, text, image, path (SVG path data in "d"), svg (a complete <svg> markup string, ideal for icons).
 - Coordinates: x/y are relative to the parent frame. Top-level frames without x/y are placed automatically to the right of existing ones.
@@ -76,4 +76,4 @@ export const MODEL_GUIDE = `Tandem document model (Figma-like):
 - Image: src = an asset id from upload_image, a data: URL, or an https URL (fetched and stored on create), fit cover|contain|fill, radius.
 - svg: svg markup; "currentColor" in it is replaced by the node's color.
 - Every node can carry name and note (design rationale visible to humans in the editor).
-- Ids: pass your own readable id (e.g. "hero-title") to refer to nodes later, or let Tandem generate one.`;
+- Ids: pass your own readable id (e.g. "hero-title") to refer to nodes later, or let Draft generate one.`;

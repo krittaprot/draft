@@ -1,6 +1,8 @@
-<p align="center"><img src="docs/tandem-icon-minimal.png" width="96" height="96" alt="Tandem icon: a white cursor and cyan curve on a navy tile"></p>
+<p align="center"><img src="docs/tandem-icon-minimal.png" width="96" height="96" alt="Draft icon: a white cursor and cyan curve on a navy tile"></p>
 
-<h1 align="center">Tandem</h1>
+<h1 align="center">Draft</h1>
+
+Formerly Tandem. Existing `tandem` commands, repository URL, server address and data paths remain compatible.
 
 <p align="center"><b>The self-hosted design canvas for you and your AI agents.</b><br>
 Claude Code, Codex, opencode or any MCP client designs on it. You watch it happen, edit by hand, and review every change.<br>
@@ -11,15 +13,15 @@ Runs on your own machine. Your designs stay on your disk.</p>
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-1F5FD6" alt="MIT licence"></a>
 </p>
 
-![The Tandem editor: an agent's latest change outlined in amber on a wallet app design, with the history panel listing revisions by codex and claude-code](src/web/shots/review.png)
+![The Draft editor: an agent's latest change outlined in amber on a wallet app design, with the history panel listing revisions by codex and claude-code](src/web/shots/review.png)
 
-## Why Tandem
+## Why Draft
 
 - **Agents get a real canvas.** Over MCP they create whole screens with frames and auto-layout. They take screenshots to check their own work, and share a link so you can see it in chat.
 - **You stay in charge.** Every agent edit lands live, outlined in amber with the agent's name. Edit any layer by hand, pin comments the agent reads and answers, and step back through history.
-- **It's yours.** Tandem is one small Node.js server you run yourself: on a laptop while you work, or on an always-on Mac you reach from anywhere through your own domain. Designs are plain files on your disk, with every revision kept. MIT licensed.
+- **It's yours.** Draft is one small Node.js server you run yourself: on a laptop while you work, or on an always-on Mac you reach from anywhere through your own domain. Designs are plain files on your disk, with every revision kept. MIT licensed.
 
-Tandem is a clean-room design inspired by the Figma mental model (frames, auto-layout, layers). It contains no Figma code.
+Draft is a clean-room design inspired by the Figma mental model (frames, auto-layout, layers). It contains no Figma code.
 
 ## Self-host in a minute
 
@@ -45,13 +47,13 @@ The web app installs like a native one: in Safari choose File → Add to Dock, a
 ./scripts/install.sh
 ```
 
-This builds `~/Applications/Tandem.app` and the `tandem` command in `~/.local/bin`. Nothing starts on its own. Open Tandem.app:
-- It uses a Tandem server already running at `http://127.0.0.1:3290`, or starts its bundled one while the app is open.
-- To point it at another server, such as an always-on Mac, use Tandem → Settings….
+This builds `~/Applications/Draft.app` and the `tandem` command in `~/.local/bin`. Nothing starts on its own. Open Draft.app:
+- It uses a Draft server already running at `http://127.0.0.1:3290`, or starts its bundled one while the app is open.
+- To point it at another server, such as an always-on Mac, use Draft → Settings….
 
 ## Connect agents
 
-On the machine running Tandem, one command per agent creates a key named after it and registers the MCP server:
+On the machine running Draft, one command per agent creates a key named after it and registers the MCP server:
 
 ```bash
 tandem connect claude      # Claude Code (user scope, HTTP + bearer header)
@@ -102,7 +104,7 @@ TANDEM_TOKEN=<TOKEN> codex mcp add tandem --url https://tandem.example.com/mcp -
 
 ## Put it online (always-on Mac + your own domain)
 
-Run Tandem on a Mac that stays on, and reach it from anywhere through a Cloudflare Tunnel. No open ports needed.
+Run Draft on a Mac that stays on, and reach it from anywhere through a Cloudflare Tunnel. No open ports needed.
 
 Copy `deploy/deploy.env.example` to `deploy/deploy.env` and set the label prefix, hostname and ports. Then:
 
@@ -137,7 +139,7 @@ pnpm install
 pnpm typecheck
 pnpm test                       # builds, then end-to-end tests over real MCP clients
 node dist/server.js serve --port 3291 --data /tmp/tandem-dev
-./scripts/build-app.sh          # build/Tandem.app (universal; bundles both resvg binaries)
+./scripts/build-app.sh          # build/Draft.app (universal; bundles both resvg binaries)
 ```
 
 Layout:

@@ -1,4 +1,8 @@
-# AGENTS.md: working on Tandem
+# AGENTS.md: working on Draft (formerly Tandem)
+
+The product is named Draft. Compatibility identifiers (`tandem` CLI, environment
+variables, data paths, bundle ID, repository and hostname) retain their existing
+names. The Mac build is `build/Draft.app`, with `build/Tandem.app` as a compatibility symlink.
 
 Read by Codex, opencode and other coding agents. Start here, then read `README.md` for the
 user-facing story. If `deploy/OPERATOR.md` exists, read it too: it describes the live

@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Tandem — the self-hosted design canvas for you and your agents</title>
+  <title>Draft — the self-hosted design canvas for you and your agents</title>
   <meta name="description" content="Open-source design canvas you host on your own machine. Claude Code, Codex and opencode draw on it through MCP; you watch changes land live, edit by hand and review with comments.">
   <meta name="theme-color" content="#f5f7fb">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/icon-192.png">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
-  <meta name="apple-mobile-web-app-title" content="Tandem">
+  <meta name="apple-mobile-web-app-title" content="Draft">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <link rel="preload" href="/fonts/Geist-Variable.woff2" as="font" type="font/woff2" crossorigin>
@@ -18,7 +18,7 @@
 <body>
   <header class="nav">
     <nav class="nav__pill" aria-label="Main">
-      <a class="wordmark" href="/"><img src="/icons/icon-192.png" alt="" width="26" height="26">tandem</a>
+      <a class="wordmark" href="/"><img src="/icons/icon-192.png" alt="" width="26" height="26">draft</a>
       <div class="nav__links">
         <a href="#how">How it works</a>
         <a href="#self-host">Self-host</a>
@@ -33,7 +33,7 @@
       <div class="hero__grid">
         <h1>Your agents design. <span class="you">You direct.</span></h1>
         <div>
-          <p class="lede">Tandem is an open-source design canvas you run on your own machine. Claude Code, Codex and opencode draw on it through MCP. You watch each change land, edit any layer by hand, and leave comments the agent reads back.</p>
+          <p class="lede">Draft is an open-source design canvas you run on your own machine. Claude Code, Codex and opencode draw on it through MCP. You watch each change land, edit any layer by hand, and leave comments the agent reads back.</p>
           <div class="actions">
             <a class="btn btn--primary" href="#self-host">Host your own</a>
             <a class="btn btn--ghost" href="/login">Sign in</a>
@@ -41,8 +41,8 @@
         </div>
       </div>
       <figure class="shot">
-        <img src="/shots/review.png" width="1440" height="817" alt="The Tandem editor showing a phone-sized wallet design. A dashed amber outline surrounds a row of four quick-action buttons, and a banner reads: Latest change by codex: Added quick actions row. The history panel lists revisions by codex and claude-code." fetchpriority="high">
-        <figcaption><span class="mark mark--agent" aria-hidden="true"></span>codex just added the quick-actions row. Tandem outlines exactly what an agent changed, names who did it, and keeps every revision so you can step back.</figcaption>
+        <img src="/shots/review.png" width="1440" height="817" alt="The Draft editor showing a phone-sized wallet design. A dashed amber outline surrounds a row of four quick-action buttons, and a banner reads: Latest change by codex: Added quick actions row. The history panel lists revisions by codex and claude-code." fetchpriority="high">
+        <figcaption><span class="mark mark--agent" aria-hidden="true"></span>codex just added the quick-actions row. Draft outlines exactly what an agent changed, names who did it, and keeps every revision so you can step back.</figcaption>
       </figure>
     </section>
 
@@ -75,7 +75,7 @@
           <p>Every change is a revision with an author: you, <code>claude-code</code>, <code>codex</code>. Preview any of them, compare against the live design, or restore it.</p>
         </div>
         <figure class="shot">
-          <img src="/shots/comments.png" width="1060" height="560" alt="The Tandem editor with the Comments panel open. The owner asked to add quick actions under the balance; codex replied that it added a four-button row." loading="lazy">
+          <img src="/shots/comments.png" width="1060" height="560" alt="The Draft editor with the Comments panel open. The owner asked to add quick actions under the balance; codex replied that it added a four-button row." loading="lazy">
           <figcaption><span class="mark mark--you" aria-hidden="true"></span>Your note on the balance card, and codex’s reply after it made the change.</figcaption>
         </figure>
       </div>
@@ -85,7 +85,7 @@
       <div class="wrap connect-grid">
         <div class="copy">
           <h2>Connect any agent</h2>
-          <p>On the machine running Tandem, one command registers it with your coding agent and gives that agent its own key, so its name appears on every change it makes.</p>
+          <p>On the machine running Draft, one command registers it with your coding agent and gives that agent its own key, so its name appears on every change it makes.</p>
           <div class="code">
             <span class="code__label">terminal</span>
 <pre>tandem connect claude     <span class="c"># Claude Code</span>
@@ -109,7 +109,7 @@ tandem connect opencode   <span class="c"># opencode</span></pre>
       <div class="wrap">
         <div class="copy">
           <h2>Host it yourself</h2>
-          <p>Tandem is one small Node.js server. Run it on your laptop while you work, or on an always-on Mac and reach it from anywhere through your own domain. Your designs stay on your disk.</p>
+          <p>Draft is one small Node.js server. Run it on your laptop while you work, or on an always-on Mac and reach it from anywhere through your own domain. Your designs stay on your disk.</p>
           <div class="code">
             <span class="code__label">terminal · needs Node.js 20+ and pnpm</span>
 <pre>git clone https://github.com/krittaprot/tandem
@@ -138,7 +138,7 @@ node dist/server.js serve   <span class="c"># http://127.0.0.1:3290</span></pre>
   </main>
 
   <footer class="wrap footer">
-    <a class="wordmark" href="/"><img src="/icons/icon-192.png" alt="" width="26" height="26">tandem</a>
+    <a class="wordmark" href="/"><img src="/icons/icon-192.png" alt="" width="26" height="26">draft</a>
     <span>Self-hosted design canvas for people and agents. MIT licence.</span>
     <a href="https://github.com/krittaprot/tandem">GitHub</a>
     <a href="/login">Sign in</a>

@@ -22,7 +22,7 @@ Usage:
   tandem member list
   tandem member remove <email>
   tandem connect <claude|codex|opencode> [--url URL] [--token TOKEN]
-  tandem stdio [--url URL]          MCP over stdio, forwarding to a running Tandem server
+  tandem stdio [--url URL]          MCP over stdio, forwarding to a running Draft server
   tandem info
 
 Environment: TANDEM_PORT, TANDEM_HOST, TANDEM_DATA, TANDEM_PUBLIC_URL, TANDEM_TOKEN,
@@ -88,7 +88,7 @@ async function serve() {
   const tokenLogin = (flags['token-login'] ?? (process.env.TANDEM_TOKEN_LOGIN || undefined) ?? (neon ? 'local' : 'on')) as 'on' | 'local' | 'off';
   const server = createHttpServer(engine, { trustProxy: true, neon, tokenLogin });
   server.listen(port, host, () => {
-    console.log(`Tandem ${VERSION} listening on ${localUrl} (public URL ${publicUrl}), data in ${dataDir}`);
+    console.log(`Draft ${VERSION} listening on ${localUrl} (public URL ${publicUrl}), data in ${dataDir}`);
     if (neon) console.log(`Google sign-in via Neon Auth is on; ${auth.members().length} member(s)${allowedEmails.length ? `, limited to ${allowedEmails.join(', ')}` : ''}; browser sign-in with tokens: ${tokenLogin}`);
     if (owner) console.log(`Created the owner token; it is in ${path.join(dataDir, 'owner-token')} (readable only by you).`);
   });
@@ -120,7 +120,7 @@ function connect() {
   const url = (flags.url ?? publicUrl).replace(/\/+$/, '');
   let tok = flags.token;
   if (!tok) {
-    if (!fs.existsSync(path.join(dataDir, 'auth.json'))) die(`No Tandem server data in ${dataDir}. Run this on the Tandem host, or pass --token (create one there with: tandem token create <name>).`);
+    if (!fs.existsSync(path.join(dataDir, 'auth.json'))) die(`No Draft server data in ${dataDir}. Run this on the Draft host, or pass --token (create one there with: tandem token create <name>).`);
     const auth = new Auth(dataDir);
     const base = { claude: 'claude-code', codex: 'codex', opencode: 'opencode' }[client as 'claude'] ?? client;
     let name = base;
@@ -147,7 +147,7 @@ function connect() {
   }
   const r = spawnSync(cmd[0], cmd.slice(1), { stdio: 'inherit' });
   if (r.status !== 0) die(`${cmd[0]} exited with ${r.status}`);
-  console.log(`Tandem is connected to ${client}. Restart any open ${client} session to load it.`);
+  console.log(`Draft is connected to ${client}. Restart any open ${client} session to load it.`);
 }
 
 async function stdio() {

@@ -24,7 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         web.allowsMagnification = false
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1440, height: 900),
                           styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-        window.title = "Tandem"
+        window.title = "Draft"
         window.contentView = web
         window.setFrameAutosaveName("TandemMain")
         window.center()
@@ -42,11 +42,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     // MARK: server
 
     func start() {
-        showMessage("Starting Tandem…")
+        showMessage("Starting Draft…")
         DispatchQueue.global().async {
             if self.healthy() { DispatchQueue.main.async { self.open() }; return }
             guard self.isLocal else {
-                DispatchQueue.main.async { self.showMessage("Can't reach \(self.serverURL). Check the server, or change it in Tandem → Settings…") }
+                DispatchQueue.main.async { self.showMessage("Can't reach \(self.serverURL). Check the server, or change it in Draft → Settings…") }
                 return
             }
             do { try self.launchBundledServer() } catch {
@@ -54,7 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                 return
             }
             for _ in 0..<100 { if self.healthy() { break }; Thread.sleep(forTimeInterval: 0.1) }
-            DispatchQueue.main.async { self.healthy() ? self.open() : self.showMessage("The Tandem server didn't start. See ~/Library/Logs/Tandem/server.log") }
+            DispatchQueue.main.async { self.healthy() ? self.open() : self.showMessage("The Draft server didn't start. See ~/Library/Logs/Tandem/server.log") }
         }
     }
 
@@ -89,7 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
     func launchBundledServer() throws {
         guard let node = findNode() else {
-            throw NSError(domain: "Tandem", code: 1, userInfo: [NSLocalizedDescriptionKey: "Tandem needs Node.js 20 or newer. Install it (for example: brew install node) and reopen Tandem."])
+            throw NSError(domain: "Tandem", code: 1, userInfo: [NSLocalizedDescriptionKey: "Draft needs Node.js 20 or newer. Install it (for example: brew install node) and reopen Draft."])
         }
         guard let script = Bundle.main.path(forResource: "server/dist/server", ofType: "js") else {
             throw NSError(domain: "Tandem", code: 2, userInfo: [NSLocalizedDescriptionKey: "This copy of Tandem.app is missing its server. Rebuild it with scripts/build-app.sh."])
@@ -181,8 +181,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
     @objc func showSettings() {
         let a = NSAlert()
-        a.messageText = "Tandem server"
-        a.informativeText = "Use \(defaultURL) to run Tandem on this Mac, or enter the address of another Tandem server, such as your Mac mini's public URL."
+        a.messageText = "Draft server"
+        a.informativeText = "Use \(defaultURL) to run Draft on this Mac, or enter the address of another Draft server, such as your Mac mini's public URL."
         let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 360, height: 24))
         field.stringValue = serverURL
         a.accessoryView = field
@@ -201,12 +201,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         let main = NSMenu()
         let appItem = NSMenuItem(); main.addItem(appItem)
         let app = NSMenu()
-        app.addItem(withTitle: "About Tandem", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        app.addItem(withTitle: "About Draft", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
         app.addItem(.separator())
         app.addItem(withTitle: "Settings…", action: #selector(showSettings), keyEquivalent: ",")
         app.addItem(.separator())
-        app.addItem(withTitle: "Hide Tandem", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
-        app.addItem(withTitle: "Quit Tandem", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        app.addItem(withTitle: "Hide Draft", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        app.addItem(withTitle: "Quit Draft", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appItem.submenu = app
 
         // Cut/Copy/Paste/Select All for text fields; undo stays with the page (Cmd+Z reverts your last change)

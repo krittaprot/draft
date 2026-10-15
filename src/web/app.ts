@@ -73,7 +73,7 @@ async function loadDoc(id: string, keepView = true) {
   const idx = indexDoc(doc);
   S.sel = S.sel.filter((s) => idx.has(s));
   ($('#doc-name') as HTMLInputElement).value = doc.name;
-  document.title = `${doc.name} · Tandem`;
+  document.title = `${doc.name} · Draft`;
   if (first) {
     S.comments = await api<Comment[]>(`/api/docs/${id}/comments`);
     history.replaceState(null, '', `#doc=${id}`);
@@ -771,7 +771,7 @@ async function showHome() {
   // a design may have been opened while the list was loading; live refreshes must not cover it
   if (!onHome()) return;
   ($('#home') as HTMLElement).hidden = false;
-  document.title = 'Your designs · Tandem';
+  document.title = 'Your designs · Draft';
   ($('#home-new') as HTMLElement).hidden = S.me?.role === 'viewer';
   ($('#home-empty') as HTMLElement).hidden = docs.length > 0;
   $('#home-grid').innerHTML = docs.map((d) => {
@@ -790,7 +790,7 @@ async function route() {
   clearTimeout(homeTimer);
   ($('#home') as HTMLElement).hidden = true;
   if (S.live?.id !== docId) { S.preview = null; S.sel = []; await loadDoc(docId); }
-  else { document.title = `${S.live.name} · Tandem`; render(); }
+  else { document.title = `${S.live.name} · Draft`; render(); }
   const node = hash.get('node');
   if (node && S.doc && indexDoc(S.doc).has(node)) selectNode(node, true);
 }
@@ -811,7 +811,7 @@ async function openConnect() {
     <p>Add a custom connector with this URL. The app asks you to approve it here; nothing to copy.</p>
     <pre class="cmd">${esc(base)}/mcp</pre>
     ${apps.length ? `<table class="tokens">${apps.map((a) => `<tr><td><b>${esc(a.app)}</b> <span class="meta">as ${esc(a.name)}</span></td><td>${a.role}</td><td class="meta">${a.lastUsed ? 'used ' + ago(a.lastUsed) : 'not used yet'} · approved by ${esc(a.approvedBy)}</td><td><button class="btn small ghost danger" data-revoke-app="${esc(a.id)}">Disconnect</button></td></tr>`).join('')}</table>` : ''}
-    <h3>Coding agents on the Tandem host (one command each)</h3>
+    <h3>Coding agents on the Draft host (one command each)</h3>
     <pre class="cmd">tandem connect claude\ntandem connect codex\ntandem connect opencode</pre>
     <h3>Coding agents elsewhere</h3>
     ${owner ? `<p>Create a token for each agent; its name shows on every change it makes.</p><form id="new-token" class="row" style="justify-content:flex-start"><input name="name" placeholder="token name, e.g. claude-code" pattern="[a-z0-9][a-z0-9._-]{0,39}" required><select name="role"><option>editor</option><option>viewer</option></select><button class="btn primary">Create token</button></form><div id="token-out"></div>` : '<p>Ask the owner for a token.</p>'}

@@ -1,12 +1,12 @@
 #!/bin/bash
-# Builds build/Tandem.app: the native window plus a bundled copy of the server. Run from anywhere.
+# Builds build/Draft.app: the native window plus a bundled copy of the server. Run from anywhere.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 [[ -d node_modules ]] || pnpm install --frozen-lockfile
 node scripts/build.mjs
 
-APP=build/Tandem.app
+APP=build/Draft.app
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/server/node_modules/@resvg"
 swiftc -O -o build/Tandem-arm64 -target arm64-apple-macos13 mac/main.swift
@@ -43,4 +43,7 @@ fi
 cp build/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
 codesign --force --deep --sign - "$APP"
+# Keep existing Dock bookmarks and local launch scripts working after the rebrand.
+rm -rf build/Tandem.app
+ln -s Draft.app build/Tandem.app
 echo "Built $APP"

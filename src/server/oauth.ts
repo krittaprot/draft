@@ -64,7 +64,7 @@ export class OAuth {
       authorization_servers: [this.issuer],
       bearer_methods_supported: ['header'],
       scopes_supported: ['tandem'],
-      resource_name: 'Tandem',
+      resource_name: 'Draft',
       resource_documentation: `${this.issuer}/`,
     };
   }

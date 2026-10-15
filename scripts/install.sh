@@ -10,7 +10,9 @@ pnpm install --frozen-lockfile
 ./scripts/build-app.sh
 mkdir -p "$HOME/Applications" "$HOME/.local/bin"
 rm -rf "$HOME/Applications/Tandem.app"
-cp -R build/Tandem.app "$HOME/Applications/Tandem.app"
+rm -rf "$HOME/Applications/Draft.app"
+cp -R build/Draft.app "$HOME/Applications/Draft.app"
+ln -s Draft.app "$HOME/Applications/Tandem.app"
 
 cat > "$HOME/.local/bin/tandem" <<'SH'
 #!/bin/sh
@@ -19,6 +21,6 @@ SH
 chmod +x "$HOME/.local/bin/tandem"
 
 echo
-echo "Installed ~/Applications/Tandem.app and ~/.local/bin/tandem"
+echo "Installed ~/Applications/Draft.app and ~/.local/bin/tandem"
 case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) echo "Add ~/.local/bin to your PATH to use the tandem command.";; esac
-echo "Next: open Tandem.app, then connect agents with: tandem connect claude | codex | opencode"
+echo "Next: open Draft.app, then connect agents with: tandem connect claude | codex | opencode"

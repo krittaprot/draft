@@ -1,6 +1,6 @@
-# Contributing to Tandem
+# Contributing to Draft
 
-Thanks for helping. Tandem is a small project, so the process is light.
+Thanks for helping. Draft is a small project, so the process is light.
 
 ## Before you start
 

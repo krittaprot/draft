@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleName</key>
-	<string>Tandem</string>
+	<string>Draft</string>
 	<key>CFBundleDisplayName</key>
-	<string>Tandem</string>
+	<string>Draft</string>
 	<key>CFBundleIdentifier</key>
 	<string>app.tandem.desktop</string>
 	<key>CFBundleExecutable</key>

@@ -66,7 +66,7 @@ const PAGE = (title: string, body: string) => `<!doctype html><html><head><meta 
 
 const GOOGLE_ICON = '<svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4 7.1-10 7.1-17.5z"/><path fill="#FBBC05" d="M10.6 28.6A14.6 14.6 0 0 1 9.5 24c0-1.6.3-3.2.8-4.6l-7.9-6.1A24 24 0 0 0 0 24c0 3.9.9 7.5 2.7 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.5-5.8c-2.1 1.4-4.8 2.3-8.4 2.3-6.2 0-11.5-4.1-13.4-9.8l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>';
 
-const LOGIN_PAGE = (opts: { error?: string; next?: string; google?: boolean; tokens?: boolean } = {}) => PAGE('Tandem · Sign in', `<form method="post" action="/login"><img src="/icons/icon-192.png" width="56" height="56" alt=""><h1>Tandem</h1>
+const LOGIN_PAGE = (opts: { error?: string; next?: string; google?: boolean; tokens?: boolean } = {}) => PAGE('Draft · Sign in', `<form method="post" action="/login"><img src="/icons/icon-192.png" width="56" height="56" alt=""><h1>Draft</h1>
 ${opts.error ? `<p class="error">${escHtml(opts.error)}</p>` : ''}
 ${opts.google ? `<a class="google" href="/auth/google?next=${encodeURIComponent(opts.next ?? '/')}">${GOOGLE_ICON}<span>Continue with Google</span></a>` : ''}
 ${opts.tokens ? `${opts.google ? '<div class="or"><span>or use an access token</span></div>' : '<p>Paste an access token. Run <code>tandem token create &lt;name&gt;</code> on the host to make one.</p>'}
@@ -187,7 +187,7 @@ export function createHttpServer(engine: Engine, opts: { trustProxy: boolean; ne
         res.writeHead(status, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-frame-options': 'DENY', 'content-security-policy': "default-src 'self'; style-src 'self'; img-src 'self' data:; frame-ancestors 'none'" });
         res.end(PAGE(title, body));
       };
-      const errorPage = (msg: string) => page('Tandem · Connect', `<form><img src="/icons/icon-192.png" width="56" height="56" alt=""><h1>Can't connect this app</h1><p class="error">${escHtml(msg)}</p></form>`, 400);
+      const errorPage = (msg: string) => page('Draft · Connect', `<form><img src="/icons/icon-192.png" width="56" height="56" alt=""><h1>Can't connect this app</h1><p class="error">${escHtml(msg)}</p></form>`, 400);
       const redirect = (to: string) => { res.writeHead(303, { location: to }).end(); };
 
       const isPost = req.method === 'POST';
@@ -220,9 +220,9 @@ export function createHttpServer(engine: Engine, opts: { trustProxy: boolean; ne
       let host = areq.redirectUri;
       try { host = new URL(areq.redirectUri).host || areq.redirectUri; } catch { /* keep */ }
       const viewerOnly = who.role === 'viewer';
-      return page('Tandem · Connect', `<form method="post" action="/oauth/authorize" class="consent"><img src="/icons/icon-192.png" width="56" height="56" alt="">
+      return page('Draft · Connect', `<form method="post" action="/oauth/authorize" class="consent"><img src="/icons/icon-192.png" width="56" height="56" alt="">
 <h1>Connect ${escHtml(areq.client.client_name)}?</h1>
-<p><b>${escHtml(areq.client.client_name)}</b> wants to use your Tandem designs. Its changes will show up as <b>${escHtml(appNameFor(areq.client.client_name))}</b> in the history.</p>
+<p><b>${escHtml(areq.client.client_name)}</b> wants to use your Draft designs. Its changes will show up as <b>${escHtml(appNameFor(areq.client.client_name))}</b> in the history.</p>
 <p class="meta">After you approve, you go back to <b>${escHtml(host)}</b>. You can disconnect it any time under Connect agent.</p>
 <label class="check"><input type="checkbox" name="readonly" ${viewerOnly ? 'checked disabled' : ''}> View only (it can look and take screenshots, but not edit)</label>
 <p class="meta">Signed in as ${escHtml(who.email ?? who.name)}</p>
@@ -419,7 +419,7 @@ export function createHttpServer(engine: Engine, opts: { trustProxy: boolean; ne
         try { result = await opts.neon.finish(cookies(req).tandem_flow, url.searchParams.get('neon_auth_session_verifier')); } catch (e) { console.log(`[auth] google callback failed: ${(e as Error).message}`); back((e as Error).message); return; }
         const p = auth.memberLogin(result.user.email);
         console.log(`[auth] google sign-in ${p ? 'accepted' : 'refused'} for ${result.user.email}`);
-        if (!p) { back(`${result.user.email} can't sign in to this Tandem.`, result.next); return; }
+        if (!p) { back(`${result.user.email} can't sign in to this Draft.`, result.next); return; }
         res.setHeader('set-cookie', [clear]);
         setSession(req, res, p);
         res.writeHead(303, { location: result.next }).end();
