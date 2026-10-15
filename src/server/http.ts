@@ -12,7 +12,7 @@ import type { Principal, Role } from './auth.ts';
 import type { ChangeEvent, Comment } from './store.ts';
 
 const WEB_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'web');
-const STATIC: Record<string, string> = { '/app.js': 'text/javascript', '/style.css': 'text/css', '/icon.svg': 'image/svg+xml' };
+const STATIC: Record<string, string> = { '/app.js': 'text/javascript', '/style.css': 'text/css', '/icon.png': 'image/png' };
 const MAX_BODY = 20 * 1024 * 1024;
 
 class HttpError extends Error { constructor(public status: number, msg: string) { super(msg); } }
@@ -52,9 +52,9 @@ function send(res: http.ServerResponse, status: number, body: unknown, type = 'a
   res.end(data);
 }
 
-const LOGIN_PAGE = (error = '') => `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Easel · Sign in</title><link rel="icon" href="/icon.svg"><link rel="stylesheet" href="/style.css"></head>
-<body class="login"><form method="post" action="/login"><img src="/icon.svg" width="48" height="48" alt=""><h1>Easel</h1><p>Paste an access token. Run <code>easel token create &lt;name&gt;</code> on the host to make one.</p>
-${error ? `<p class="error">${error}</p>` : ''}<input name="token" type="password" placeholder="easel_…" autocomplete="current-password" autofocus required><button>Sign in</button></form></body></html>`;
+const LOGIN_PAGE = (error = '') => `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tandem · Sign in</title><link rel="icon" href="/icon.png"><link rel="stylesheet" href="/style.css"></head>
+<body class="login"><form method="post" action="/login"><img src="/icon.png" width="48" height="48" alt=""><h1>Tandem</h1><p>Paste an access token. Run <code>tandem token create &lt;name&gt;</code> on the host to make one.</p>
+${error ? `<p class="error">${error}</p>` : ''}<input name="token" type="password" placeholder="tandem_…" autocomplete="current-password" autofocus required><button>Sign in</button></form></body></html>`;
 
 export function createHttpServer(engine: Engine, opts: { trustProxy: boolean }) {
   const { store, auth } = engine;
@@ -76,7 +76,7 @@ export function createHttpServer(engine: Engine, opts: { trustProxy: boolean }) 
   };
   const secure = (req: http.IncomingMessage) => req.headers['x-forwarded-proto'] === 'https' || engine.publicUrl.startsWith('https:');
   const setSession = (req: http.IncomingMessage, res: http.ServerResponse, p: Principal) => {
-    res.setHeader('set-cookie', `easel_session=${auth.session(p)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 86400}${secure(req) ? '; Secure' : ''}`);
+    res.setHeader('set-cookie', `tandem_session=${auth.session(p)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 86400}${secure(req) ? '; Secure' : ''}`);
   };
 
   const bearer = (req: http.IncomingMessage) => {
@@ -92,7 +92,7 @@ export function createHttpServer(engine: Engine, opts: { trustProxy: boolean }) 
       if (!p) throw new HttpError(401, 'invalid token');
       return { p, viaCookie: false };
     }
-    const p = auth.verifySession(cookies(req).easel_session);
+    const p = auth.verifySession(cookies(req).tandem_session);
     if (!p) throw new HttpError(401, 'sign in required');
     return { p, viaCookie: true };
   };
@@ -108,8 +108,8 @@ export function createHttpServer(engine: Engine, opts: { trustProxy: boolean }) 
     const tok = bearer(req);
     const p = tok ? auth.verify(tok, clientIp(req)) : null;
     if (!p) {
-      res.writeHead(401, { 'content-type': 'application/json', 'www-authenticate': 'Bearer realm="easel"' });
-      res.end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32001, message: 'Missing or invalid bearer token. Create one with: easel token create <name>' }, id: null }));
+      res.writeHead(401, { 'content-type': 'application/json', 'www-authenticate': 'Bearer realm="tandem"' });
+      res.end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32001, message: 'Missing or invalid bearer token. Create one with: tandem token create <name>' }, id: null }));
       return;
     }
     if (req.method !== 'POST') {
@@ -128,7 +128,7 @@ export function createHttpServer(engine: Engine, opts: { trustProxy: boolean }) 
     const { p, viaCookie } = principal(req);
     const method = req.method ?? 'GET';
     // cookie-authenticated writes must come from the editor itself (custom header forces a CORS preflight)
-    if (viaCookie && method !== 'GET' && req.headers['x-easel'] !== '1') throw new HttpError(403, 'missing X-Easel header');
+    if (viaCookie && method !== 'GET' && req.headers['x-tandem'] !== '1') throw new HttpError(403, 'missing X-Tandem header');
     const parts = url.pathname.split('/').filter(Boolean).slice(1); // after "api"
     const q = url.searchParams;
     const json = (b: unknown, s = 200) => send(res, s, b);
@@ -235,7 +235,7 @@ export function createHttpServer(engine: Engine, opts: { trustProxy: boolean }) 
     const url = new URL(req.url ?? '/', 'http://localhost');
     try {
       const pth = url.pathname;
-      if (pth === '/healthz') return send(res, 200, { ok: true, name: 'easel', version: VERSION });
+      if (pth === '/healthz') return send(res, 200, { ok: true, name: 'tandem', version: VERSION });
       if (pth === '/mcp' || pth === '/mcp/') return await handleMcp(req, res);
       if (pth.startsWith('/api/')) return await handleApi(req, res, url);
 
@@ -259,7 +259,7 @@ export function createHttpServer(engine: Engine, opts: { trustProxy: boolean }) 
         return;
       }
       if (pth === '/logout') {
-        res.writeHead(303, { location: '/login', 'set-cookie': 'easel_session=; Path=/; Max-Age=0' }).end();
+        res.writeHead(303, { location: '/login', 'set-cookie': 'tandem_session=; Path=/; Max-Age=0' }).end();
         return;
       }
 
@@ -289,7 +289,7 @@ export function createHttpServer(engine: Engine, opts: { trustProxy: boolean }) 
         return res.end(fs.readFileSync(path.join(WEB_DIR, pth.slice(1))));
       }
       if (pth === '/' || pth === '/index.html') {
-        if (!auth.verifySession(cookies(req).easel_session)) { res.writeHead(303, { location: '/login' }).end(); return; }
+        if (!auth.verifySession(cookies(req).tandem_session)) { res.writeHead(303, { location: '/login' }).end(); return; }
         res.writeHead(200, {
           'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache', 'x-content-type-options': 'nosniff',
           'content-security-policy': "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'",

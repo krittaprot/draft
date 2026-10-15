@@ -1,6 +1,6 @@
 // Text measurement shared by the server (PNG screenshots) and the browser editor, so both wrap text
 // identically. Uses Helvetica advance widths (Arial is metric-compatible); other fonts are approximated.
-import type { EaselNode } from './model.ts';
+import type { TandemNode } from './model.ts';
 
 // Helvetica advance widths per 1000 em for ASCII 32..126.
 const ASCII = [
@@ -27,7 +27,7 @@ function charWidth(c: number): number {
 
 export interface TextStyle { fontSize: number; fontWeight: number; letterSpacing: number; lineHeight: number }
 
-export function textStyle(n: EaselNode): TextStyle {
+export function textStyle(n: TandemNode): TextStyle {
   const fontSize = n.fontSize ?? 16;
   return { fontSize, fontWeight: n.fontWeight ?? 400, letterSpacing: n.letterSpacing ?? 0, lineHeight: (n.lineHeight ?? 1.3) * fontSize };
 }
@@ -62,7 +62,7 @@ export function wrapText(text: string, st: TextStyle, maxWidth?: number): string
   return out;
 }
 
-export function measureText(n: EaselNode, maxWidth?: number): { lines: string[]; width: number; height: number } {
+export function measureText(n: TandemNode, maxWidth?: number): { lines: string[]; width: number; height: number } {
   const st = textStyle(n);
   const lines = wrapText(n.text ?? '', st, maxWidth);
   const width = Math.ceil(Math.max(0, ...lines.map((l) => measureLine(l, st))));

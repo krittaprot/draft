@@ -1,5 +1,5 @@
 // End-to-end: starts a throwaway server, drives it through real MCP clients (HTTP and the stdio bridge)
-// and the editor API, then stops it. Set EASEL_TEST_OUT=<dir> to keep the rendered PNGs.
+// and the editor API, then stops it. Set TANDEM_TEST_OUT=<dir> to keep the rendered PNGs.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
@@ -15,8 +15,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const server = path.join(root, 'dist/server.js');
 const port = 3391 + Math.floor(Math.random() * 500);
 const base = `http://127.0.0.1:${port}`;
-const data = fs.mkdtempSync(path.join(os.tmpdir(), 'easel-test-'));
-const out = process.env.EASEL_TEST_OUT;
+const data = fs.mkdtempSync(path.join(os.tmpdir(), 'tandem-test-'));
+const out = process.env.TANDEM_TEST_OUT;
 let proc;
 let owner;
 
@@ -50,7 +50,7 @@ after(() => {
 test('rejects missing and wrong tokens', async () => {
   const r = await fetch(`${base}/mcp`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
   assert.equal(r.status, 401);
-  await assert.rejects(connect('easel_wrong'));
+  await assert.rejects(connect('tandem_wrong'));
   assert.equal((await fetch(`${base}/api/docs`)).status, 401);
 });
 
@@ -80,7 +80,7 @@ test('agent designs a screen, sees it, and the history records it', async () => 
       type: 'frame', id: 'home', name: 'Home', width: 1200, layout: 'column', gap: 48, padding: [72, 80], fill: { type: 'linear', angle: 180, stops: [{ offset: 0, color: '#eff6ff' }, { offset: 1, color: '#ffffff' }] },
       children: [
         { type: 'frame', id: 'nav', layout: 'row', width: 'fill', justify: 'space-between', align: 'center', fill: null, children: [
-          { type: 'text', text: 'Easel', fontSize: 22, fontWeight: 800, color: '#2563eb' },
+          { type: 'text', text: 'Tandem', fontSize: 22, fontWeight: 800, color: '#2563eb' },
           { type: 'frame', layout: 'row', gap: 12, align: 'center', fill: null, children: [
             { type: 'text', text: 'Docs', fontSize: 15, color: '#334155' },
             { type: 'frame', id: 'cta', layout: 'row', padding: [10, 18], radius: 999, fill: '#2563eb', children: [{ type: 'text', text: 'Get started', fontSize: 15, fontWeight: 600, color: '#ffffff' }] },
@@ -140,7 +140,7 @@ test('people review through comments; agents read and answer them', async () => 
   const login = await fetch(`${base}/login`, { method: 'POST', body: new URLSearchParams({ token: owner }), redirect: 'manual' });
   assert.equal(login.status, 303);
   const cookie = login.headers.get('set-cookie').split(';')[0];
-  const h = { cookie, 'x-easel': '1', 'content-type': 'application/json' };
+  const h = { cookie, 'x-tandem': '1', 'content-type': 'application/json' };
   const docs = await (await fetch(`${base}/api/docs`, { headers: h })).json();
   const doc = docs[0];
   // cookie writes without the editor header are refused (CSRF guard)

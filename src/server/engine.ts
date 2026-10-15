@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import dns from 'node:dns/promises';
 import net from 'node:net';
 import { Resvg } from '@resvg/resvg-js';
-import { DEFAULT_FONT, indexDoc, type Box, type EaselDoc, type EaselNode, type Page } from '../shared/model.ts';
+import { DEFAULT_FONT, indexDoc, type Box, type TandemDoc, type TandemNode, type Page } from '../shared/model.ts';
 import { renderPage } from '../shared/render.ts';
 import { layoutPage, padding as padOf, type Boxes } from '../shared/layout.ts';
 import { textStyle } from '../shared/text.ts';
@@ -33,11 +33,11 @@ export class Engine {
     this.fonts = [...SYSTEM_FONTS.filter((f) => fs.existsSync(f)), ...store.fontFiles()];
   }
 
-  getDoc(id: string, rev?: number): EaselDoc {
+  getDoc(id: string, rev?: number): TandemDoc {
     return rev === undefined ? this.store.getDoc(id) : this.store.getRevision(id, rev);
   }
 
-  page(doc: EaselDoc, pageId?: string, nodeId?: string): Page {
+  page(doc: TandemDoc, pageId?: string, nodeId?: string): Page {
     if (nodeId) {
       const w = indexDoc(doc).get(nodeId);
       if (!w) throw new OpError(`node "${nodeId}" not found`);
@@ -94,7 +94,7 @@ export class Engine {
     const addrs = await dns.lookup(u.hostname, { all: true }).catch(() => []);
     if (!addrs.length) throw new OpError(`cannot resolve ${u.hostname}`);
     if (addrs.some((a) => isPrivate(a.address))) throw new OpError(`refusing to fetch images from private address ${u.hostname}`);
-    const res = await fetch(u, { redirect: 'manual', signal: AbortSignal.timeout(15000), headers: { 'user-agent': 'Easel/0.1 (+image fetch)' } });
+    const res = await fetch(u, { redirect: 'manual', signal: AbortSignal.timeout(15000), headers: { 'user-agent': 'Tandem/0.1 (+image fetch)' } });
     if (res.status >= 300 && res.status < 400 && res.headers.get('location')) {
       if (!redirects) throw new OpError('too many redirects');
       return this.fetchImage(new URL(res.headers.get('location')!, u).toString(), redirects - 1);
@@ -124,12 +124,12 @@ export class Engine {
 
   // ---------- rendering ----------
 
-  renderSVG(doc: EaselDoc, opts: { pageId?: string; nodeId?: string; padding?: number }) {
+  renderSVG(doc: TandemDoc, opts: { pageId?: string; nodeId?: string; padding?: number }) {
     const page = this.page(doc, opts.pageId, opts.nodeId);
     return renderPage(page, { assetHref: this.inlineAsset }, opts.nodeId, opts.padding ?? (opts.nodeId ? 0 : 40));
   }
 
-  renderPNG(doc: EaselDoc, opts: { pageId?: string; nodeId?: string; scale?: number; maxSide?: number; padding?: number }) {
+  renderPNG(doc: TandemDoc, opts: { pageId?: string; nodeId?: string; scale?: number; maxSide?: number; padding?: number }) {
     const r = this.renderSVG(doc, opts);
     if (!r.body) throw new OpError('nothing to render: the page is empty');
     const side = Math.max(r.box.w, r.box.h);
@@ -157,7 +157,7 @@ export class Engine {
 
   // ---------- reading ----------
 
-  outline(doc: EaselDoc, opts: { pageId?: string; nodeId?: string; depth?: number }): string {
+  outline(doc: TandemDoc, opts: { pageId?: string; nodeId?: string; depth?: number }): string {
     const depth = opts.depth ?? 4;
     const lines: string[] = [];
     const pages = opts.nodeId ? [this.page(doc, undefined, opts.nodeId)] : opts.pageId ? [this.page(doc, opts.pageId)] : doc.pages;
@@ -165,7 +165,7 @@ export class Engine {
       const boxes = layoutPage(page);
       lines.push(`page "${page.name}" id=${page.id}${page.background ? ` background=${page.background}` : ''}`);
       const roots = opts.nodeId ? [indexDoc(doc).get(opts.nodeId)!.node] : page.children;
-      const visit = (n: EaselNode, d: number) => {
+      const visit = (n: TandemNode, d: number) => {
         lines.push('  '.repeat(d + 1) + describe(n, boxes));
         if (!n.children?.length) return;
         if (d + 1 >= depth) { lines.push('  '.repeat(d + 2) + `… ${countNodes(n.children)} nested nodes (raise depth or call get_node)`); return; }
@@ -177,14 +177,14 @@ export class Engine {
     return lines.join('\n');
   }
 
-  nodeDetail(doc: EaselDoc, nodeId: string): { node: EaselNode; box: Box; parent: string; page: string } {
+  nodeDetail(doc: TandemDoc, nodeId: string): { node: TandemNode; box: Box; parent: string; page: string } {
     const w = indexDoc(doc).get(nodeId);
     if (!w) throw new OpError(`node "${nodeId}" not found`);
     const box = layoutPage(w.page).get(nodeId)!;
     return { node: w.node, box: roundBox(box), parent: w.parent?.id ?? w.page.id, page: w.page.id };
   }
 
-  exportHTML(doc: EaselDoc, nodeId: string): string {
+  exportHTML(doc: TandemDoc, nodeId: string): string {
     const w = indexDoc(doc).get(nodeId);
     if (!w) throw new OpError(`node "${nodeId}" not found`);
     const boxes = layoutPage(w.page);
@@ -194,13 +194,13 @@ export class Engine {
   }
 }
 
-function countNodes(list: EaselNode[]): number {
+function countNodes(list: TandemNode[]): number {
   return list.reduce((a, n) => a + 1 + countNodes(n.children ?? []), 0);
 }
 
 const roundBox = (b: Box): Box => ({ x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.w), h: Math.round(b.h) });
 
-function describe(n: EaselNode, boxes: Boxes): string {
+function describe(n: TandemNode, boxes: Boxes): string {
   const b = roundBox(boxes.get(n.id) ?? { x: 0, y: 0, w: 0, h: 0 });
   let s = `${n.type} id=${n.id}`;
   if (n.name) s += ` "${n.name}"`;
@@ -238,7 +238,7 @@ function sniff(buf: Buffer): string {
 
 const escHtml = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
-function cssFill(f: EaselNode['fill']): string | null {
+function cssFill(f: TandemNode['fill']): string | null {
   if (f === undefined || f === null) return null;
   const list = Array.isArray(f) ? f : [f];
   const layers = list.map((x) => typeof x === 'string' ? `linear-gradient(${x},${x})`
@@ -248,7 +248,7 @@ function cssFill(f: EaselNode['fill']): string | null {
   return `background:${layers.reverse().join(',')}`;
 }
 
-function htmlNode(n: EaselNode, boxes: Boxes, parent: EaselNode | null, asset: (s: string) => string): string {
+function htmlNode(n: TandemNode, boxes: Boxes, parent: TandemNode | null, asset: (s: string) => string): string {
   if (n.visible === false) return '';
   const b = boxes.get(n.id)!;
   const pb = parent ? boxes.get(parent.id)! : null;
@@ -276,7 +276,7 @@ function htmlNode(n: EaselNode, boxes: Boxes, parent: EaselNode | null, asset: (
   if (n.rotation) css.push(`transform:rotate(${n.rotation}deg)`);
   if (n.shadows?.length) css.push(`box-shadow:${n.shadows.map((s) => `${s.inset ? 'inset ' : ''}${s.x ?? 0}px ${s.y ?? 4}px ${s.blur ?? 12}px ${s.color ?? 'rgba(0,0,0,0.15)'}`).join(',')}`);
   if (n.blur) css.push(`filter:blur(${n.blur}px)`);
-  const tag = (inner: string, el = 'div') => `<${el} data-easel-id="${escHtml(n.id)}" style="${escHtml(css.join(';'))}">${inner}</${el}>`;
+  const tag = (inner: string, el = 'div') => `<${el} data-tandem-id="${escHtml(n.id)}" style="${escHtml(css.join(';'))}">${inner}</${el}>`;
 
   switch (n.type) {
     case 'frame': {
@@ -301,7 +301,7 @@ function htmlNode(n: EaselNode, boxes: Boxes, parent: EaselNode | null, asset: (
     }
     case 'image':
       css.push(`object-fit:${n.fit ?? 'cover'}`);
-      return `<img data-easel-id="${escHtml(n.id)}" alt="${escHtml(n.name ?? '')}" src="${escHtml(n.src ? asset(n.src) : '')}" style="${escHtml(css.join(';'))}">`;
+      return `<img data-tandem-id="${escHtml(n.id)}" alt="${escHtml(n.name ?? '')}" src="${escHtml(n.src ? asset(n.src) : '')}" style="${escHtml(css.join(';'))}">`;
     case 'svg': {
       let markup = n.svg ?? '';
       if (n.color) markup = markup.replace(/currentColor/g, n.color);

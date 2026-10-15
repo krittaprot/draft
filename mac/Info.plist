@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleName</key>
-	<string>Easel</string>
+	<string>Tandem</string>
 	<key>CFBundleDisplayName</key>
-	<string>Easel</string>
+	<string>Tandem</string>
 	<key>CFBundleIdentifier</key>
-	<string>app.easel.desktop</string>
+	<string>app.tandem.desktop</string>
 	<key>CFBundleExecutable</key>
-	<string>Easel</string>
+	<string>Tandem</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

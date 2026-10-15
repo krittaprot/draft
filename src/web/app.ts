@@ -1,5 +1,5 @@
-// Easel browser editor: infinite canvas, layers, inspector, comments, history and live agent activity.
-import { indexDoc, type Box, type EaselDoc, type EaselNode, type Page } from '../shared/model.ts';
+// Tandem browser editor: infinite canvas, layers, inspector, comments, history and live agent activity.
+import { indexDoc, type Box, type TandemDoc, type TandemNode, type Page } from '../shared/model.ts';
 import { renderPage } from '../shared/render.ts';
 import { isAuto, type Boxes } from '../shared/layout.ts';
 
@@ -16,8 +16,8 @@ const SVGNS = 'http://www.w3.org/2000/svg';
 
 const S = {
   me: null as Me | null,
-  doc: null as EaselDoc | null,
-  live: null as EaselDoc | null, // latest version; doc differs while previewing a revision
+  doc: null as TandemDoc | null,
+  live: null as TandemDoc | null, // latest version; doc differs while previewing a revision
   preview: null as Rev | null,
   pageId: '',
   sel: [] as string[],
@@ -38,7 +38,7 @@ const S = {
 // ---------------- API ----------------
 
 async function api<T = unknown>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> {
-  const headers: Record<string, string> = { 'x-easel': '1' };
+  const headers: Record<string, string> = { 'x-tandem': '1' };
   if (init.json !== undefined) { headers['content-type'] = 'application/json'; init.body = JSON.stringify(init.json); }
   const res = await fetch(path, { ...init, headers: { ...headers, ...(init.headers as Record<string, string>) } });
   if (res.status === 401) { location.href = '/login'; throw new Error('signed out'); }
@@ -59,7 +59,7 @@ async function ops(list: Op[], message: string) {
 }
 
 async function loadDoc(id: string, keepView = true) {
-  const doc = await api<EaselDoc>(`/api/docs/${id}`);
+  const doc = await api<TandemDoc>(`/api/docs/${id}`);
   const first = !S.doc || S.doc.id !== id;
   S.live = doc;
   if (!S.preview) S.doc = doc;
@@ -67,7 +67,7 @@ async function loadDoc(id: string, keepView = true) {
   const idx = indexDoc(doc);
   S.sel = S.sel.filter((s) => idx.has(s));
   ($('#doc-name') as HTMLInputElement).value = doc.name;
-  document.title = `${doc.name} · Easel`;
+  document.title = `${doc.name} · Tandem`;
   if (first) {
     S.comments = await api<Comment[]>(`/api/docs/${id}/comments`);
     history.replaceState(null, '', `#doc=${id}`);
@@ -189,7 +189,7 @@ function drawOverlay() {
     if (!b) continue;
     const s = toScreen(b);
     ov.append(svgEl('rect', { x: s.x, y: s.y, width: s.w, height: s.h, fill: 'none', stroke: '#2563eb', 'stroke-width': 1.5 }));
-    const node = idx.get(id)?.node as EaselNode | undefined;
+    const node = idx.get(id)?.node as TandemNode | undefined;
     if (S.sel.length === 1 && canEdit() && node && !node.locked) {
       for (const [h, hx, hy] of [['nw', s.x, s.y], ['ne', s.x + s.w, s.y], ['se', s.x + s.w, s.y + s.h], ['sw', s.x, s.y + s.h]] as const) {
         ov.append(svgEl('rect', { x: hx - 4, y: hy - 4, width: 8, height: 8, fill: '#fff', stroke: '#2563eb', 'stroke-width': 1.5, 'data-handle': h, style: `cursor:${h === 'nw' || h === 'se' ? 'nwse' : 'nesw'}-resize` }));
@@ -229,7 +229,7 @@ function drawLayers() {
   if (!pg) { ul.innerHTML = ''; return; }
   const changed = new Set<string>([...S.flash.keys()]);
   const rows: string[] = [];
-  const visit = (list: EaselNode[], depth: number) => {
+  const visit = (list: TandemNode[], depth: number) => {
     // top of the stack first, like Figma
     for (const n of [...list].reverse()) {
       const kids = n.children?.length ? n.children : null;
@@ -265,10 +265,10 @@ function drawPanel() {
   if (!canEdit()) $$('#panel input, #panel select, #panel textarea').forEach((el) => ((el as HTMLInputElement).disabled = true));
 }
 
-function selected(): EaselNode[] {
+function selected(): TandemNode[] {
   if (!S.doc) return [];
   const idx = indexDoc(S.doc);
-  return S.sel.map((id) => idx.get(id)?.node).filter(Boolean) as EaselNode[];
+  return S.sel.map((id) => idx.get(id)?.node).filter(Boolean) as TandemNode[];
 }
 
 const num = (prop: string, label: string, v: unknown, step = 1) => `<label class="field"><span>${label}</span><input data-prop="${prop}" data-kind="num" type="number" step="${step}" value="${v ?? ''}"></label>`;
@@ -363,7 +363,7 @@ function commentsPanel(): string {
   const idx = S.doc ? indexDoc(S.doc) : new Map();
   return `<div class="panel-head"><span>Pick the comment tool (C) and click the canvas.</span><label class="check"><input type="checkbox" data-show-resolved ${S.showResolved ? 'checked' : ''}> Resolved</label></div>` +
     (list.map((c) => {
-      const target = c.nodeId ? (idx.get(c.nodeId)?.node as EaselNode | undefined) : undefined;
+      const target = c.nodeId ? (idx.get(c.nodeId)?.node as TandemNode | undefined) : undefined;
       return `<div class="thread ${c.resolved ? 'resolved' : ''}" data-thread="${esc(c.id)}">
       <div><span class="who">${esc(c.author)}</span> <span class="when">${ago(c.time)}</span></div>
       ${c.nodeId ? `<span class="target" data-goto="${esc(c.nodeId)}">on ${esc(target?.name ?? c.nodeId)}${target ? '' : ' (deleted)'}</span>` : ''}
@@ -468,7 +468,7 @@ async function previewRevision(rev: number) {
   if (!meta) return;
   if (rev === S.live.rev) { exitPreview(); return; }
   S.preview = meta;
-  S.doc = await api<EaselDoc>(`/api/docs/${S.live.id}?rev=${rev}`);
+  S.doc = await api<TandemDoc>(`/api/docs/${S.live.id}?rev=${rev}`);
   if (!S.doc.pages.some((p) => p.id === S.pageId)) S.pageId = S.doc.pages[0].id;
   const pageOfChange = meta.changed.map((id) => indexDoc(S.doc!).get(id)?.page.id).find(Boolean);
   if (pageOfChange) S.pageId = pageOfChange;
@@ -542,18 +542,18 @@ function hitNode(target: EventTarget | null): string | null {
   const idx = indexDoc(S.doc);
   while (el) {
     const id = el.getAttribute('data-id')!;
-    if (!(idx.get(id)?.node as EaselNode | undefined)?.locked) return id;
+    if (!(idx.get(id)?.node as TandemNode | undefined)?.locked) return id;
     el = el.parentElement?.closest('[data-id]') ?? null;
   }
   return null;
 }
 
 /** Deepest frame containing a page point, for placing newly drawn shapes. */
-function frameAt(pt: { x: number; y: number }): EaselNode | null {
+function frameAt(pt: { x: number; y: number }): TandemNode | null {
   const pg = page();
   if (!pg) return null;
-  let best: EaselNode | null = null;
-  const visit = (list: EaselNode[]) => {
+  let best: TandemNode | null = null;
+  const visit = (list: TandemNode[]) => {
     for (const n of list) {
       if (n.type !== 'frame' || n.visible === false) continue;
       const b = S.boxes.get(n.id);
@@ -754,8 +754,8 @@ async function openConnect() {
   body.innerHTML = `<div class="connect">
     <p>Agents connect over MCP at <code>${esc(base)}/mcp</code> with a bearer token. Each agent gets its own token, so its name shows on every change it makes.</p>
     ${S.me!.role === 'owner' ? `<form id="new-token" class="row" style="justify-content:flex-start"><input name="name" placeholder="token name, e.g. claude-code" pattern="[a-z0-9][a-z0-9._-]{0,39}" required><select name="role"><option>editor</option><option>viewer</option></select><button class="btn primary">Create token</button></form><div id="token-out"></div>` : '<p>Ask the owner for a token.</p>'}
-    <h3>On the Easel host (one command per agent)</h3>
-    <pre class="cmd">easel connect claude\neasel connect codex\neasel connect opencode</pre>
+    <h3>On the Tandem host (one command per agent)</h3>
+    <pre class="cmd">tandem connect claude\ntandem connect codex\ntandem connect opencode</pre>
     <h3>Anywhere else</h3><p>Create a token above, then:</p>
     <pre class="cmd" id="cmds">${esc(connectCommands(base, '<TOKEN>'))}</pre>
     ${tokenRows.length ? `<h3>Tokens</h3><table class="tokens">${tokenRows.map((t) => `<tr><td><b>${esc(t.name)}</b></td><td>${t.role}</td><td class="meta">${t.lastUsed ? 'used ' + ago(t.lastUsed) : 'never used'}</td><td>${t.role === 'owner' && t.name === 'owner' ? '' : `<button class="btn small ghost danger" data-revoke="${esc(t.name)}">Revoke</button>`}</td></tr>`).join('')}</table>` : ''}
@@ -765,17 +765,17 @@ async function openConnect() {
 
 function connectCommands(base: string, tok: string) {
   return `# Claude Code
-claude mcp add --scope user --transport http easel ${base}/mcp --header "Authorization: Bearer ${tok}"
+claude mcp add --scope user --transport http tandem ${base}/mcp --header "Authorization: Bearer ${tok}"
 
 # Codex (token from the environment)
-export EASEL_TOKEN=${tok}
-codex mcp add easel --url ${base}/mcp --bearer-token-env-var EASEL_TOKEN
+export TANDEM_TOKEN=${tok}
+codex mcp add tandem --url ${base}/mcp --bearer-token-env-var TANDEM_TOKEN
 
 # opencode
-opencode mcp add --global easel --url ${base}/mcp --header "Authorization=Bearer ${tok}"
+opencode mcp add --global tandem --url ${base}/mcp --header "Authorization=Bearer ${tok}"
 
 # Any MCP client (JSON config)
-{ "mcpServers": { "easel": { "type": "http", "url": "${base}/mcp", "headers": { "Authorization": "Bearer ${tok}" } } } }`;
+{ "mcpServers": { "tandem": { "type": "http", "url": "${base}/mcp", "headers": { "Authorization": "Bearer ${tok}" } } } }`;
 }
 
 function connectEvents() {
@@ -952,7 +952,7 @@ function wire() {
   $('#new-doc').addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = e.target as HTMLFormElement;
-    const doc = await api<EaselDoc>('/api/docs', { method: 'POST', json: { name: (f.elements.namedItem('name') as HTMLInputElement).value } });
+    const doc = await api<TandemDoc>('/api/docs', { method: 'POST', json: { name: (f.elements.namedItem('name') as HTMLInputElement).value } });
     f.reset();
     $<HTMLDialogElement>('#docs-dialog').close();
     S.preview = null; S.sel = [];
@@ -1036,7 +1036,7 @@ async function boot() {
   let docId = hash.get('doc');
   if (!docId) {
     const docs = await api<{ id: string }[]>('/api/docs');
-    docId = docs[0]?.id ?? (S.me.role !== 'viewer' ? (await api<EaselDoc>('/api/docs', { method: 'POST', json: { name: 'Untitled' } })).id : null);
+    docId = docs[0]?.id ?? (S.me.role !== 'viewer' ? (await api<TandemDoc>('/api/docs', { method: 'POST', json: { name: 'Untitled' } })).id : null);
   }
   if (!docId) { toast('No documents yet.'); return; }
   await loadDoc(docId);

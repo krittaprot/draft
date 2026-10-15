@@ -1,6 +1,6 @@
 // Renders a page (or one node) to SVG. The browser editor draws this markup directly and the server
 // rasterises the same markup to PNG for screenshots, so agents and humans see identical output.
-import { DEFAULT_FONT, type Box, type EaselNode, type Fill, type Page } from './model.ts';
+import { DEFAULT_FONT, type Box, type TandemNode, type Fill, type Page } from './model.ts';
 import { layoutPage, unionBox, type Boxes } from './layout.ts';
 import { measureText, textStyle } from './text.ts';
 
@@ -42,13 +42,13 @@ function paint(ctx: Ctx, f: Fill | undefined): string {
   return `url(#${id})`;
 }
 
-function fills(n: EaselNode, fallback?: string): Fill[] {
+function fills(n: TandemNode, fallback?: string): Fill[] {
   if (n.fill === null) return [];
   if (n.fill === undefined) return fallback ? [fallback] : [];
   return Array.isArray(n.fill) ? n.fill : [n.fill];
 }
 
-function shapePath(n: EaselNode, b: Box): { tag: string; attrs: string } {
+function shapePath(n: TandemNode, b: Box): { tag: string; attrs: string } {
   if (n.type === 'ellipse') return { tag: 'ellipse', attrs: `cx="${r2(b.x + b.w / 2)}" cy="${r2(b.y + b.h / 2)}" rx="${r2(b.w / 2)}" ry="${r2(b.h / 2)}"` };
   const r = n.radius ?? 0;
   if (typeof r === 'number') {
@@ -62,14 +62,14 @@ function shapePath(n: EaselNode, b: Box): { tag: string; attrs: string } {
   return { tag: 'path', attrs: `d="${d}"` };
 }
 
-function strokeAttrs(n: EaselNode): string {
+function strokeAttrs(n: TandemNode): string {
   if (!n.stroke) return '';
   let s = ` stroke="${esc(n.stroke)}" stroke-width="${n.strokeWidth ?? 1}"`;
   if (n.strokeDash?.length) s += ` stroke-dasharray="${n.strokeDash.join(' ')}"`;
   return s;
 }
 
-function shadowFilter(ctx: Ctx, n: EaselNode): string {
+function shadowFilter(ctx: Ctx, n: TandemNode): string {
   const sh = (n.shadows ?? []).filter((s) => !s.inset);
   if (!sh.length && !n.blur) return '';
   const id = ctx.uid('f');
@@ -85,7 +85,7 @@ function shadowFilter(ctx: Ctx, n: EaselNode): string {
   return ` filter="url(#${id})"`;
 }
 
-function renderNode(ctx: Ctx, n: EaselNode): string {
+function renderNode(ctx: Ctx, n: TandemNode): string {
   if (n.visible === false) return '';
   const b = ctx.boxes.get(n.id);
   if (!b) return '';
@@ -198,7 +198,7 @@ export function renderPage(page: Page, opts: RenderOptions, nodeId?: string, pad
   return { svg, body, defs, box, boxes };
 }
 
-export function findIn(list: EaselNode[], id: string): EaselNode | undefined {
+export function findIn(list: TandemNode[], id: string): TandemNode | undefined {
   for (const n of list) {
     if (n.id === id) return n;
     if (n.children) { const f = findIn(n.children, id); if (f) return f; }

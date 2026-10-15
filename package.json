@@ -1,11 +1,11 @@
 {
-  "name": "easel",
+  "name": "tandem",
   "version": "0.1.0",
   "description": "Open-source design canvas that AI agents (Claude Code, Codex, opencode) drive over MCP, with a live editor for human edits and review.",
   "license": "MIT",
   "type": "module",
   "bin": {
-    "easel": "bin/easel.js"
+    "tandem": "bin/tandem.js"
   },
   "engines": {
     "node": ">=20"

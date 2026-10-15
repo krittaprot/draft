@@ -9,7 +9,7 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import crypto from 'node:crypto';
 import { EventEmitter } from 'node:events';
-import { newId, type EaselDoc } from '../shared/model.ts';
+import { newId, type TandemDoc } from '../shared/model.ts';
 
 export interface RevisionMeta { rev: number; author: string; message: string; time: string; changed: string[] }
 export interface CommentReply { id: string; author: string; text: string; time: string }
@@ -30,7 +30,7 @@ function writeAtomic(file: string, data: string | Buffer) {
 }
 
 export class Store extends EventEmitter {
-  private cache = new Map<string, EaselDoc>();
+  private cache = new Map<string, TandemDoc>();
   constructor(public dir: string) {
     super();
     this.setMaxListeners(1000);
@@ -56,19 +56,19 @@ export class Store extends EventEmitter {
     return DOC_ID.test(id) && fs.existsSync(path.join(this.docDir(id), 'doc.json'));
   }
 
-  getDoc(id: string): EaselDoc {
+  getDoc(id: string): TandemDoc {
     const hit = this.cache.get(id);
     if (hit) return hit;
     const file = path.join(this.docDir(id), 'doc.json');
     if (!fs.existsSync(file)) throw new Error(`document "${id}" not found`);
-    const doc = JSON.parse(fs.readFileSync(file, 'utf8')) as EaselDoc;
+    const doc = JSON.parse(fs.readFileSync(file, 'utf8')) as TandemDoc;
     this.cache.set(id, doc);
     return doc;
   }
 
-  createDoc(name: string, author: string): EaselDoc {
+  createDoc(name: string, author: string): TandemDoc {
     const now = new Date().toISOString();
-    const doc: EaselDoc = { id: newId('d'), name: name.slice(0, 200) || 'Untitled', created: now, updated: now, rev: 0, pages: [{ id: newId('p'), name: 'Page 1', children: [] }] };
+    const doc: TandemDoc = { id: newId('d'), name: name.slice(0, 200) || 'Untitled', created: now, updated: now, rev: 0, pages: [{ id: newId('p'), name: 'Page 1', children: [] }] };
     fs.mkdirSync(path.join(this.docDir(doc.id), 'revs'), { recursive: true });
     this.commit(doc, { author, message: 'Created document', changed: [] }, true);
     this.emit('change', { type: 'docs' } satisfies ChangeEvent);
@@ -87,10 +87,10 @@ export class Store extends EventEmitter {
   }
 
   /** Saves next as the new current version and records a revision. */
-  commit(next: EaselDoc, meta: { author: string; message: string; changed: string[] }, initial = false): RevisionMeta {
+  commit(next: TandemDoc, meta: { author: string; message: string; changed: string[] }, initial = false): RevisionMeta {
     const dir = this.docDir(next.id);
     const prev = initial ? null : this.getDoc(next.id);
-    const doc: EaselDoc = { ...next, rev: (prev?.rev ?? -1) + 1, updated: new Date().toISOString() };
+    const doc: TandemDoc = { ...next, rev: (prev?.rev ?? -1) + 1, updated: new Date().toISOString() };
     const rev: RevisionMeta = { rev: doc.rev, author: meta.author, message: meta.message.slice(0, 500) || 'Edit', time: doc.updated, changed: meta.changed.slice(0, 2000) };
     const json = JSON.stringify(doc);
     fs.writeFileSync(path.join(dir, 'revs', `${doc.rev}.json.gz`), zlib.gzipSync(json));
@@ -108,7 +108,7 @@ export class Store extends EventEmitter {
     return list.slice(-limit).reverse();
   }
 
-  getRevision(id: string, rev: number): EaselDoc {
+  getRevision(id: string, rev: number): TandemDoc {
     if (!Number.isInteger(rev) || rev < 0) throw new Error('invalid revision');
     const file = path.join(this.docDir(id), 'revs', `${rev}.json.gz`);
     if (!fs.existsSync(file)) throw new Error(`revision ${rev} of "${id}" not found`);

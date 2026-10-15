@@ -60,7 +60,7 @@ export class Auth {
     this.refresh();
     if (!NAME_RE.test(name)) throw new Error('token name must be 1-40 lowercase letters, digits, ".", "_" or "-"');
     if (this.data.tokens.some((t) => t.name === name)) throw new Error(`a token named "${name}" already exists`);
-    const token = `easel_${crypto.randomBytes(24).toString('base64url')}`;
+    const token = `tandem_${crypto.randomBytes(24).toString('base64url')}`;
     this.data.tokens.push({ name, hash: sha(token), role, created: new Date().toISOString() });
     this.save();
     return token;

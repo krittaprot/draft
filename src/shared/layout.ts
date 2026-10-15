@@ -1,16 +1,16 @@
 // Computes the absolute page-space box of every node, including Figma-style auto-layout.
-import type { Box, EaselNode, Page } from './model.ts';
+import type { Box, TandemNode, Page } from './model.ts';
 import { measureText } from './text.ts';
 
 export type Boxes = Map<string, Box>;
 type Size = number | 'hug' | 'fill';
 interface Sz { w: number; h: number }
 
-export function isAuto(n: EaselNode): boolean {
+export function isAuto(n: TandemNode): boolean {
   return n.type === 'frame' && (n.layout === 'row' || n.layout === 'column');
 }
 
-function spec(n: EaselNode, axis: 'width' | 'height'): Size {
+function spec(n: TandemNode, axis: 'width' | 'height'): Size {
   const v = n[axis];
   if (v !== undefined) return v;
   if (n.type === 'text') return 'hug';
@@ -20,25 +20,25 @@ function spec(n: EaselNode, axis: 'width' | 'height'): Size {
   return 100;
 }
 
-export function padding(n: EaselNode): [number, number, number, number] {
+export function padding(n: TandemNode): [number, number, number, number] {
   const p = n.padding ?? 0;
   if (typeof p === 'number') return [p, p, p, p];
   if (p.length === 2) return [p[0], p[1], p[0], p[1]];
   return p;
 }
 
-function inFlow(k: EaselNode): boolean {
+function inFlow(k: TandemNode): boolean {
   return k.visible !== false && k.position !== 'absolute';
 }
 
-function clampW(n: EaselNode, w: number): number {
+function clampW(n: TandemNode, w: number): number {
   if (n.maxWidth !== undefined) w = Math.min(w, n.maxWidth);
   if (n.minWidth !== undefined) w = Math.max(w, n.minWidth);
   return w;
 }
 
 /** Natural size of a node, optionally with its width and/or height decided by the parent. */
-export function measure(n: EaselNode, forcedW?: number, forcedH?: number): Sz {
+export function measure(n: TandemNode, forcedW?: number, forcedH?: number): Sz {
   const ws = spec(n, 'width');
   const hs = spec(n, 'height');
   let w = forcedW ?? (typeof ws === 'number' ? ws : undefined);
@@ -96,7 +96,7 @@ export function measure(n: EaselNode, forcedW?: number, forcedH?: number): Sz {
 }
 
 /** Size of an auto-layout child when its main-axis size is not "fill". */
-function measureChild(parent: EaselNode, k: EaselNode, row: boolean, innerCross: number | undefined, forcedMain?: number): Sz {
+function measureChild(parent: TandemNode, k: TandemNode, row: boolean, innerCross: number | undefined, forcedMain?: number): Sz {
   const crossSpec = spec(k, row ? 'height' : 'width');
   const stretch = crossSpec === 'fill' || parent.align === 'stretch';
   const forcedCross = stretch ? innerCross : undefined;
@@ -117,12 +117,12 @@ export function layoutPage(page: Page): Boxes {
   return boxes;
 }
 
-function place(n: EaselNode, x: number, y: number, w: number, h: number, boxes: Boxes): void {
+function place(n: TandemNode, x: number, y: number, w: number, h: number, boxes: Boxes): void {
   boxes.set(n.id, { x, y, w, h });
   if (n.type !== 'frame' || !n.children) return;
   const [pt, pr, pb, pl] = padding(n);
 
-  const placeAbsolute = (k: EaselNode, innerW: number, innerH: number, ox: number, oy: number) => {
+  const placeAbsolute = (k: TandemNode, innerW: number, innerH: number, ox: number, oy: number) => {
     const fw = k.width === 'fill' ? innerW : undefined;
     const fh = k.height === 'fill' ? innerH : undefined;
     const s = measure(k, fw, fh);

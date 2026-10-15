@@ -1,7 +1,7 @@
 // Edit operations. MCP tools and the browser editor both express changes as ops, which are validated
 // and applied to a copy of the document; the store then commits the result as one revision.
 import { propsSchema } from '../shared/schema.ts';
-import { ID_RE, NODE_TYPES, indexDoc, newId, type EaselDoc, type EaselNode, type NodeType, type Page } from '../shared/model.ts';
+import { ID_RE, NODE_TYPES, indexDoc, newId, type TandemDoc, type TandemNode, type NodeType, type Page } from '../shared/model.ts';
 import { layoutPage } from '../shared/layout.ts';
 
 export type NodeSpec = Record<string, unknown>;
@@ -18,7 +18,7 @@ export type Op =
 
 export class OpError extends Error {}
 
-export interface ApplyResult { doc: EaselDoc; changed: string[]; created: string[] }
+export interface ApplyResult { doc: TandemDoc; changed: string[]; created: string[] }
 
 const PROP_KEYS = Object.keys(propsSchema.shape);
 
@@ -37,7 +37,7 @@ function validateProps(props: Record<string, unknown>, where: string): Record<st
   return r.data as Record<string, unknown>;
 }
 
-function buildNode(spec: unknown, where: string, taken: Set<string>, created: string[]): EaselNode {
+function buildNode(spec: unknown, where: string, taken: Set<string>, created: string[]): TandemNode {
   if (!spec || typeof spec !== 'object' || Array.isArray(spec)) throw new OpError(`${where}: expected a node object`);
   const { type, id, children, ...props } = spec as Record<string, unknown>;
   if (typeof type !== 'string' || !(NODE_TYPES as readonly string[]).includes(type)) {
@@ -53,7 +53,7 @@ function buildNode(spec: unknown, where: string, taken: Set<string>, created: st
   }
   taken.add(nodeId);
   created.push(nodeId);
-  const node: EaselNode = { id: nodeId, type: type as NodeType, ...validateProps(props, where) };
+  const node: TandemNode = { id: nodeId, type: type as NodeType, ...validateProps(props, where) };
   if (children !== undefined) {
     if (type !== 'frame') throw new OpError(`${where}.children: only frames can have children`);
     if (!Array.isArray(children)) throw new OpError(`${where}.children: must be an array`);
@@ -62,7 +62,7 @@ function buildNode(spec: unknown, where: string, taken: Set<string>, created: st
   return node;
 }
 
-function resolveParent(doc: EaselDoc, parentId: string | undefined): { list: EaselNode[]; page: Page; frame: EaselNode | null } {
+function resolveParent(doc: TandemDoc, parentId: string | undefined): { list: TandemNode[]; page: Page; frame: TandemNode | null } {
   if (!parentId) return { list: doc.pages[0].children, page: doc.pages[0], frame: null };
   const page = doc.pages.find((p) => p.id === parentId);
   if (page) return { list: page.children, page, frame: null };
@@ -73,13 +73,13 @@ function resolveParent(doc: EaselDoc, parentId: string | undefined): { list: Eas
   return { list: w.node.children, page: w.page, frame: w.node };
 }
 
-function insert(list: EaselNode[], node: EaselNode, index?: number) {
+function insert(list: TandemNode[], node: TandemNode, index?: number) {
   if (index === undefined || index < 0 || index > list.length) list.push(node);
   else list.splice(index, 0, node);
 }
 
 /** Puts a new top-level node with no position to the right of everything on the page. */
-function autoPlace(page: Page, node: EaselNode) {
+function autoPlace(page: Page, node: TandemNode) {
   if (node.x !== undefined || node.y !== undefined) return;
   const others = page.children.filter((n) => n !== node && n.visible !== false);
   if (!others.length) { node.x = 0; node.y = 0; return; }
@@ -91,7 +91,7 @@ function autoPlace(page: Page, node: EaselNode) {
   node.y = Math.round(top);
 }
 
-function cloneWithNewIds(n: EaselNode, taken: Set<string>, created: string[]): EaselNode {
+function cloneWithNewIds(n: TandemNode, taken: Set<string>, created: string[]): TandemNode {
   let id: string;
   do id = newId(n.type.slice(0, 2)); while (taken.has(id));
   taken.add(id);
@@ -99,10 +99,10 @@ function cloneWithNewIds(n: EaselNode, taken: Set<string>, created: string[]): E
   return { ...structuredClone(n), id, children: n.children?.map((c) => cloneWithNewIds(c, taken, created)) };
 }
 
-export function applyOps(source: EaselDoc, ops: Op[]): ApplyResult {
+export function applyOps(source: TandemDoc, ops: Op[]): ApplyResult {
   if (!Array.isArray(ops) || !ops.length) throw new OpError('no operations given');
   if (ops.length > 500) throw new OpError('at most 500 operations per call');
-  const doc: EaselDoc = structuredClone(source);
+  const doc: TandemDoc = structuredClone(source);
   const changed = new Set<string>();
   const created: string[] = [];
   const taken = new Set<string>([...indexDoc(doc).keys(), ...doc.pages.map((p) => p.id)]);

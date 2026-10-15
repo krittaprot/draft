@@ -1,18 +1,18 @@
 #!/bin/bash
-# Builds build/Easel.app: the native window plus a bundled copy of the server. Run from anywhere.
+# Builds build/Tandem.app: the native window plus a bundled copy of the server. Run from anywhere.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 [[ -d node_modules ]] || pnpm install --frozen-lockfile
 node scripts/build.mjs
 
-APP=build/Easel.app
+APP=build/Tandem.app
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/server/node_modules/@resvg"
-swiftc -O -o build/Easel-arm64 -target arm64-apple-macos13 mac/main.swift
-swiftc -O -o build/Easel-x86_64 -target x86_64-apple-macos13 mac/main.swift
-lipo -create build/Easel-arm64 build/Easel-x86_64 -output "$APP/Contents/MacOS/Easel"
-rm build/Easel-arm64 build/Easel-x86_64
+swiftc -O -o build/Tandem-arm64 -target arm64-apple-macos13 mac/main.swift
+swiftc -O -o build/Tandem-x86_64 -target x86_64-apple-macos13 mac/main.swift
+lipo -create build/Tandem-arm64 build/Tandem-x86_64 -output "$APP/Contents/MacOS/Tandem"
+rm build/Tandem-arm64 build/Tandem-x86_64
 cp mac/Info.plist "$APP/Contents/Info.plist"
 
 # server: the bundle plus resvg (a native module) and its prebuilt binaries for this machine
@@ -31,16 +31,12 @@ for arch in arm64 x64; do
   fi
 done
 
-if [[ ! -f build/AppIcon.icns ]]; then
+if [[ ! -f build/AppIcon.icns || mac/icon-source.png -nt build/AppIcon.icns ]]; then
   ICONSET=build/AppIcon.iconset
-  mkdir -p "$ICONSET"
-  node --input-type=module -e "
-    import { Resvg } from '@resvg/resvg-js'; import fs from 'node:fs';
-    const svg = fs.readFileSync('src/web/icon.svg', 'utf8').replace('viewBox=\"0 0 64 64\"', 'viewBox=\"-6 -6 76 76\"');
-    fs.writeFileSync('build/icon-1024.png', new Resvg(svg, { fitTo: { mode: 'width', value: 1024 } }).render().asPng());"
+  rm -rf "$ICONSET" && mkdir -p "$ICONSET"
   for px in 16 32 128 256 512; do
-    sips -z $px $px build/icon-1024.png --out "$ICONSET/icon_${px}x${px}.png" >/dev/null
-    sips -z $((px * 2)) $((px * 2)) build/icon-1024.png --out "$ICONSET/icon_${px}x${px}@2x.png" >/dev/null
+    sips -z $px $px mac/icon-source.png --out "$ICONSET/icon_${px}x${px}.png" >/dev/null
+    sips -z $((px * 2)) $((px * 2)) mac/icon-source.png --out "$ICONSET/icon_${px}x${px}@2x.png" >/dev/null
   done
   iconutil -c icns "$ICONSET" -o build/AppIcon.icns
 fi

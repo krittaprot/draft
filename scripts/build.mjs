@@ -23,5 +23,5 @@ await build({
   bundle: true, platform: 'browser', format: 'esm', target: 'es2022', minify: true, sourcemap: false,
   logLevel: 'warning',
 });
-for (const f of ['index.html', 'style.css', 'icon.svg']) fs.copyFileSync(path.join(root, 'src/web', f), path.join(dist, 'web', f));
+for (const f of ['index.html', 'style.css', 'icon.png']) fs.copyFileSync(path.join(root, 'src/web', f), path.join(dist, 'web', f));
 console.log('built dist/server.js and dist/web/');

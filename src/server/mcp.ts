@@ -1,4 +1,4 @@
-// MCP tools that let any agent (Claude Code, Codex, opencode, …) use Easel as its design canvas.
+// MCP tools that let any agent (Claude Code, Codex, opencode, …) use Tandem as its design canvas.
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
@@ -10,7 +10,7 @@ import type { Comment } from './store.ts';
 
 export const VERSION = '0.1.0';
 
-const INSTRUCTIONS = `Easel is a shared design canvas. You create and edit designs with these tools; people watch live and edit in the browser editor, and leave comments for you.
+const INSTRUCTIONS = `Tandem is a shared design canvas. You create and edit designs with these tools; people watch live and edit in the browser editor, and leave comments for you.
 
 Workflow:
 1. list_documents, or create_document for new work. Each document has pages; top-level frames on a page are screens/artboards.
@@ -30,7 +30,7 @@ const messageArg = z.string().max(300).optional().describe('short description of
 const previewArg = z.boolean().optional().describe('return a screenshot of the affected top-level frame after the change (default false)');
 
 export function buildMcpServer(engine: Engine, who: Principal): McpServer {
-  const server = new McpServer({ name: 'easel', version: VERSION }, { instructions: INSTRUCTIONS });
+  const server = new McpServer({ name: 'tandem', version: VERSION }, { instructions: INSTRUCTIONS });
   const canWrite = who.role !== 'viewer';
   const store = engine.store;
 
@@ -64,7 +64,7 @@ export function buildMcpServer(engine: Engine, who: Principal): McpServer {
   };
 
   server.registerTool('design_guide', {
-    title: 'Design guide', description: 'Explains the Easel node model and the recommended workflow. Read once before designing.',
+    title: 'Design guide', description: 'Explains the Tandem node model and the recommended workflow. Read once before designing.',
     inputSchema: {}, annotations: { readOnlyHint: true },
   }, guard(() => text(INSTRUCTIONS)));
 

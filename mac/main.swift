@@ -1,11 +1,11 @@
-// Easel.app: a native window around the Easel editor.
-// On launch it uses an Easel server already running at the configured URL (e.g. the Mac mini's launchd
+// Tandem.app: a native window around the Tandem editor.
+// On launch it uses an Tandem server already running at the configured URL (e.g. the Mac mini's launchd
 // service), or starts the bundled one and stops it again on quit. Settings… points it at a remote server.
 import AppKit
 import WebKit
 
 let defaultURL = "http://127.0.0.1:3290"
-let dataDir = NSString(string: "~/.local/share/easel/data").expandingTildeInPath
+let dataDir = NSString(string: "~/.local/share/tandem/data").expandingTildeInPath
 
 final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate {
     var window: NSWindow!
@@ -24,9 +24,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         web.allowsMagnification = false
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1440, height: 900),
                           styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-        window.title = "Easel"
+        window.title = "Tandem"
         window.contentView = web
-        window.setFrameAutosaveName("EaselMain")
+        window.setFrameAutosaveName("TandemMain")
         window.center()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -42,11 +42,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     // MARK: server
 
     func start() {
-        showMessage("Starting Easel…")
+        showMessage("Starting Tandem…")
         DispatchQueue.global().async {
             if self.healthy() { DispatchQueue.main.async { self.open() }; return }
             guard self.isLocal else {
-                DispatchQueue.main.async { self.showMessage("Can't reach \(self.serverURL). Check the server, or change it in Easel → Settings…") }
+                DispatchQueue.main.async { self.showMessage("Can't reach \(self.serverURL). Check the server, or change it in Tandem → Settings…") }
                 return
             }
             do { try self.launchBundledServer() } catch {
@@ -54,7 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                 return
             }
             for _ in 0..<100 { if self.healthy() { break }; Thread.sleep(forTimeInterval: 0.1) }
-            DispatchQueue.main.async { self.healthy() ? self.open() : self.showMessage("The Easel server didn't start. See ~/Library/Logs/Easel/server.log") }
+            DispatchQueue.main.async { self.healthy() ? self.open() : self.showMessage("The Tandem server didn't start. See ~/Library/Logs/Tandem/server.log") }
         }
     }
 
@@ -65,7 +65,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         let sem = DispatchSemaphore(value: 0)
         var ok = false
         URLSession.shared.dataTask(with: req) { data, resp, _ in
-            ok = (resp as? HTTPURLResponse)?.statusCode == 200 && String(data: data ?? Data(), encoding: .utf8)?.contains("easel") == true
+            ok = (resp as? HTTPURLResponse)?.statusCode == 200 && String(data: data ?? Data(), encoding: .utf8)?.contains("tandem") == true
             sem.signal()
         }.resume()
         _ = sem.wait(timeout: .now() + 2)
@@ -89,13 +89,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
     func launchBundledServer() throws {
         guard let node = findNode() else {
-            throw NSError(domain: "Easel", code: 1, userInfo: [NSLocalizedDescriptionKey: "Easel needs Node.js 20 or newer. Install it (for example: brew install node) and reopen Easel."])
+            throw NSError(domain: "Tandem", code: 1, userInfo: [NSLocalizedDescriptionKey: "Tandem needs Node.js 20 or newer. Install it (for example: brew install node) and reopen Tandem."])
         }
         guard let script = Bundle.main.path(forResource: "server/dist/server", ofType: "js") else {
-            throw NSError(domain: "Easel", code: 2, userInfo: [NSLocalizedDescriptionKey: "This copy of Easel.app is missing its server. Rebuild it with scripts/build-app.sh."])
+            throw NSError(domain: "Tandem", code: 2, userInfo: [NSLocalizedDescriptionKey: "This copy of Tandem.app is missing its server. Rebuild it with scripts/build-app.sh."])
         }
         let port = URL(string: serverURL)?.port ?? 3290
-        let logs = NSString(string: "~/Library/Logs/Easel").expandingTildeInPath
+        let logs = NSString(string: "~/Library/Logs/Tandem").expandingTildeInPath
         try FileManager.default.createDirectory(atPath: logs, withIntermediateDirectories: true)
         let logFile = logs + "/server.log"
         if !FileManager.default.fileExists(atPath: logFile) { FileManager.default.createFile(atPath: logFile, contents: nil) }
@@ -181,8 +181,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
     @objc func showSettings() {
         let a = NSAlert()
-        a.messageText = "Easel server"
-        a.informativeText = "Use \(defaultURL) to run Easel on this Mac, or enter the address of another Easel server, such as your Mac mini's public URL."
+        a.messageText = "Tandem server"
+        a.informativeText = "Use \(defaultURL) to run Tandem on this Mac, or enter the address of another Tandem server, such as your Mac mini's public URL."
         let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 360, height: 24))
         field.stringValue = serverURL
         a.accessoryView = field
@@ -201,12 +201,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         let main = NSMenu()
         let appItem = NSMenuItem(); main.addItem(appItem)
         let app = NSMenu()
-        app.addItem(withTitle: "About Easel", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        app.addItem(withTitle: "About Tandem", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
         app.addItem(.separator())
         app.addItem(withTitle: "Settings…", action: #selector(showSettings), keyEquivalent: ",")
         app.addItem(.separator())
-        app.addItem(withTitle: "Hide Easel", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
-        app.addItem(withTitle: "Quit Easel", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        app.addItem(withTitle: "Hide Tandem", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        app.addItem(withTitle: "Quit Tandem", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appItem.submenu = app
 
         // Cut/Copy/Paste/Select All for text fields; undo stays with the page (Cmd+Z reverts your last change)

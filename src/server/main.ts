@@ -1,4 +1,4 @@
-// easel CLI: serve the canvas, manage tokens, connect agents, and bridge stdio-only MCP clients.
+// tandem CLI: serve the canvas, manage tokens, connect agents, and bridge stdio-only MCP clients.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -10,19 +10,19 @@ import { Engine } from './engine.ts';
 import { createHttpServer } from './http.ts';
 import { VERSION } from './mcp.ts';
 
-const HELP = `easel ${VERSION} — an open design canvas for AI agents
+const HELP = `tandem ${VERSION} — an open design canvas for AI agents
 
 Usage:
-  easel serve [--port 3290] [--host 127.0.0.1] [--data DIR] [--public-url URL]
-  easel token create <name> [--role editor|viewer|owner]
-  easel token list
-  easel token revoke <name>
-  easel connect <claude|codex|opencode> [--url URL] [--token TOKEN]
-  easel stdio [--url URL]          MCP over stdio, forwarding to a running Easel server
-  easel info
+  tandem serve [--port 3290] [--host 127.0.0.1] [--data DIR] [--public-url URL]
+  tandem token create <name> [--role editor|viewer|owner]
+  tandem token list
+  tandem token revoke <name>
+  tandem connect <claude|codex|opencode> [--url URL] [--token TOKEN]
+  tandem stdio [--url URL]          MCP over stdio, forwarding to a running Tandem server
+  tandem info
 
-Environment: EASEL_PORT, EASEL_HOST, EASEL_DATA, EASEL_PUBLIC_URL, EASEL_TOKEN.
-Data defaults to ~/.local/share/easel/data.`;
+Environment: TANDEM_PORT, TANDEM_HOST, TANDEM_DATA, TANDEM_PUBLIC_URL, TANDEM_TOKEN.
+Data defaults to ~/.local/share/tandem/data.`;
 
 function args(argv: string[]) {
   const pos: string[] = [];
@@ -38,12 +38,12 @@ function args(argv: string[]) {
 }
 
 const { pos, flags } = args(process.argv.slice(2));
-const dataDir = path.resolve(flags.data ?? process.env.EASEL_DATA ?? path.join(os.homedir(), '.local/share/easel/data'));
-const port = Number(flags.port ?? process.env.EASEL_PORT ?? 3290);
-const host = flags.host ?? process.env.EASEL_HOST ?? '127.0.0.1';
+const dataDir = path.resolve(flags.data ?? process.env.TANDEM_DATA ?? path.join(os.homedir(), '.local/share/tandem/data'));
+const port = Number(flags.port ?? process.env.TANDEM_PORT ?? 3290);
+const host = flags.host ?? process.env.TANDEM_HOST ?? '127.0.0.1';
 const localUrl = `http://${host === '0.0.0.0' ? '127.0.0.1' : host}:${port}`;
-const publicUrl = (flags['public-url'] ?? process.env.EASEL_PUBLIC_URL ?? localUrl).replace(/\/+$/, '');
-const credFile = path.join(os.homedir(), '.config/easel/credentials.json');
+const publicUrl = (flags['public-url'] ?? process.env.TANDEM_PUBLIC_URL ?? localUrl).replace(/\/+$/, '');
+const credFile = path.join(os.homedir(), '.config/tandem/credentials.json');
 
 function die(msg: string): never {
   console.error(msg);
@@ -62,7 +62,7 @@ function saveCredential(url: string, token: string) {
 }
 
 function loadCredential(url: string): string | undefined {
-  if (process.env.EASEL_TOKEN) return process.env.EASEL_TOKEN;
+  if (process.env.TANDEM_TOKEN) return process.env.TANDEM_TOKEN;
   if (fs.existsSync(credFile)) return JSON.parse(fs.readFileSync(credFile, 'utf8'))[url];
   return undefined;
 }
@@ -75,7 +75,7 @@ async function serve() {
   const engine = new Engine(store, auth, publicUrl);
   const server = createHttpServer(engine, { trustProxy: true });
   server.listen(port, host, () => {
-    console.log(`Easel ${VERSION} listening on ${localUrl} (public URL ${publicUrl}), data in ${dataDir}`);
+    console.log(`Tandem ${VERSION} listening on ${localUrl} (public URL ${publicUrl}), data in ${dataDir}`);
     if (owner) console.log(`Created the owner token (shown once, also saved to ${path.join(dataDir, 'owner-token')}):\n  ${owner}`);
   });
   const stop = () => { server.close(); process.exit(0); };
@@ -87,26 +87,26 @@ function token() {
   const auth = new Auth((fs.mkdirSync(dataDir, { recursive: true }), dataDir));
   const [, sub, name] = pos;
   if (sub === 'create') {
-    if (!name) die('usage: easel token create <name> [--role editor|viewer|owner]');
+    if (!name) die('usage: tandem token create <name> [--role editor|viewer|owner]');
     const role = (flags.role ?? 'editor') as Role;
     if (!['editor', 'viewer', 'owner'].includes(role)) die('role must be editor, viewer or owner');
     console.log(auth.create(name, role));
   } else if (sub === 'list') {
     for (const t of auth.list()) console.log(`${t.name.padEnd(24)} ${t.role.padEnd(7)} created ${t.created.slice(0, 10)}${t.lastUsed ? `, last used ${t.lastUsed.slice(0, 10)}` : ''}`);
   } else if (sub === 'revoke') {
-    if (!name) die('usage: easel token revoke <name>');
+    if (!name) die('usage: tandem token revoke <name>');
     auth.revoke(name);
     console.log(`revoked ${name}`);
   } else die(HELP);
 }
 
-/** Registers Easel with an agent CLI, creating a token named after the client. */
+/** Registers Tandem with an agent CLI, creating a token named after the client. */
 function connect() {
   const client = pos[1];
   const url = (flags.url ?? publicUrl).replace(/\/+$/, '');
   let tok = flags.token;
   if (!tok) {
-    if (!fs.existsSync(path.join(dataDir, 'auth.json'))) die(`No Easel server data in ${dataDir}. Run this on the Easel host, or pass --token (create one there with: easel token create <name>).`);
+    if (!fs.existsSync(path.join(dataDir, 'auth.json'))) die(`No Tandem server data in ${dataDir}. Run this on the Tandem host, or pass --token (create one there with: tandem token create <name>).`);
     const auth = new Auth(dataDir);
     const base = { claude: 'claude-code', codex: 'codex', opencode: 'opencode' }[client as 'claude'] ?? client;
     let name = base;
@@ -118,14 +118,14 @@ function connect() {
   const self = fileURLToPath(import.meta.url);
   let cmd: string[];
   if (client === 'claude') {
-    cmd = ['claude', 'mcp', 'add', '--scope', 'user', '--transport', 'http', 'easel', mcpUrl, '--header', `Authorization: Bearer ${tok}`];
+    cmd = ['claude', 'mcp', 'add', '--scope', 'user', '--transport', 'http', 'tandem', mcpUrl, '--header', `Authorization: Bearer ${tok}`];
   } else if (client === 'codex') {
-    // Codex reads HTTP bearer tokens only from environment variables, so it talks to Easel through the stdio bridge
+    // Codex reads HTTP bearer tokens only from environment variables, so it talks to Tandem through the stdio bridge
     saveCredential(url, tok);
-    cmd = ['codex', 'mcp', 'add', 'easel', '--', process.execPath, self, 'stdio', '--url', url];
+    cmd = ['codex', 'mcp', 'add', 'tandem', '--', process.execPath, self, 'stdio', '--url', url];
   } else if (client === 'opencode') {
-    cmd = ['opencode', 'mcp', 'add', '--global', 'easel', '--url', mcpUrl, '--header', `Authorization=Bearer ${tok}`];
-  } else die('usage: easel connect <claude|codex|opencode> [--url URL] [--token TOKEN]');
+    cmd = ['opencode', 'mcp', 'add', '--global', 'tandem', '--url', mcpUrl, '--header', `Authorization=Bearer ${tok}`];
+  } else die('usage: tandem connect <claude|codex|opencode> [--url URL] [--token TOKEN]');
 
   if (!have(cmd[0])) {
     console.log(`${cmd[0]} is not on PATH. Run this where it is installed:\n  ${cmd.map((c) => (/[\s"]/.test(c) ? JSON.stringify(c) : c)).join(' ')}`);
@@ -133,7 +133,7 @@ function connect() {
   }
   const r = spawnSync(cmd[0], cmd.slice(1), { stdio: 'inherit' });
   if (r.status !== 0) die(`${cmd[0]} exited with ${r.status}`);
-  console.log(`Easel is connected to ${client}. Restart any open ${client} session to load it.`);
+  console.log(`Tandem is connected to ${client}. Restart any open ${client} session to load it.`);
 }
 
 async function stdio() {
@@ -144,10 +144,10 @@ async function stdio() {
   const { ListToolsRequestSchema, CallToolRequestSchema } = await import('@modelcontextprotocol/sdk/types.js');
   const url = (flags.url ?? publicUrl).replace(/\/+$/, '');
   const tok = flags.token ?? loadCredential(url);
-  if (!tok) die(`No token for ${url}. Set EASEL_TOKEN or run: easel connect codex --url ${url} --token <token>`);
-  const client = new Client({ name: 'easel-stdio-bridge', version: VERSION });
+  if (!tok) die(`No token for ${url}. Set TANDEM_TOKEN or run: tandem connect codex --url ${url} --token <token>`);
+  const client = new Client({ name: 'tandem-stdio-bridge', version: VERSION });
   await client.connect(new StreamableHTTPClientTransport(new URL(`${url}/mcp`), { requestInit: { headers: { Authorization: `Bearer ${tok}` } } }));
-  const server = new Server({ name: 'easel', version: VERSION }, { capabilities: { tools: {} }, instructions: client.getInstructions() });
+  const server = new Server({ name: 'tandem', version: VERSION }, { capabilities: { tools: {} }, instructions: client.getInstructions() });
   server.setRequestHandler(ListToolsRequestSchema, (r) => client.listTools(r.params));
   server.setRequestHandler(CallToolRequestSchema, (r) => client.callTool(r.params) as never);
   await server.connect(new StdioServerTransport());
