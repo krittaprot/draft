@@ -1,4 +1,4 @@
-<p align="center"><img src="src/web/icons/icon-192.png" width="96" height="96" alt="Tandem icon: a white cursor and cyan curve on a navy tile"></p>
+<p align="center"><img src="docs/tandem-icon-minimal.png" width="96" height="96" alt="Tandem icon: a white cursor and cyan curve on a navy tile"></p>
 
 <h1 align="center">Tandem</h1>
 
