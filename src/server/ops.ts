@@ -118,7 +118,6 @@ export function applyOps(source: TandemDoc, ops: Op[]): ApplyResult {
           insert(list, node, op.index);
           if (!frame) autoPlace(page, node);
           created.slice(before).forEach((id) => changed.add(id));
-          if (frame) changed.add(frame.id);
           break;
         }
         case 'update': {

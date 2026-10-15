@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Tandem — a design canvas you share with your agents</title>
+  <meta name="description" content="Open-source design canvas that Claude Code, Codex and opencode draw on through MCP. Watch changes land live, edit by hand, review with comments.">
+  <meta name="theme-color" content="#f8f6f1">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-title" content="Tandem">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="preload" href="/fonts/Geist-Variable.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/landing.css">
+</head>
+<body>
+  <header class="nav">
+    <nav class="nav__pill" aria-label="Main">
+      <a class="wordmark" href="/"><img src="/icons/icon-192.png" alt="" width="26" height="26">tandem</a>
+      <div class="nav__links">
+        <a href="#how">How it works</a>
+        <a href="#connect">Connect</a>
+      </div>
+      <a class="btn btn--primary btn--small" href="/login">Sign in</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero wrap">
+      <div class="hero__grid">
+        <h1>Your agents design. <span class="you">You direct.</span></h1>
+        <div>
+          <p class="lede">Tandem is an open-source design canvas that Claude Code, Codex and opencode draw on through MCP. You watch each change land, edit any layer by hand, and leave comments the agent reads back.</p>
+          <div class="actions">
+            <a class="btn btn--primary" href="/login">Sign in</a>
+            <a class="btn btn--ghost" href="#connect">Connect an agent</a>
+          </div>
+        </div>
+      </div>
+      <figure class="shot">
+        <img src="/shots/review.png" width="1440" height="817" alt="The Tandem editor showing a phone-sized wallet design. A dashed coral outline surrounds a row of four quick-action buttons, and a banner reads: Latest change by codex: Added quick actions row. The history panel lists revisions by codex and claude-code." fetchpriority="high">
+        <figcaption><span class="mark mark--agent" aria-hidden="true"></span>codex just added the quick-actions row. Tandem outlines exactly what an agent changed, names who did it, and keeps every revision so you can step back.</figcaption>
+      </figure>
+    </section>
+
+    <section class="bench" id="how">
+      <div class="wrap split">
+        <div class="copy">
+          <h2>It sees what it made</h2>
+          <p>Every agent gets a <code>screenshot</code> tool. It renders the frame to an image, looks at it, and fixes cramped spacing or overflowing text before it tells you it’s done.</p>
+          <p>The same render comes with a share link, so the agent can put a picture of the work straight into your chat. It opens on any device, no sign-in needed.</p>
+          <div class="code">
+            <span class="code__label">what the agent calls</span>
+<pre>screenshot({ document: "d_6o0l1z", node: "home" })
+<span class="c">→ PNG of the frame, 780 × 1688
+→ share link, valid 30 days
+→ editor link to the exact layer</span></pre>
+          </div>
+        </div>
+        <figure class="shot phone">
+          <img src="/shots/agent-view.png" width="780" height="1688" alt="A rendered phone screen for a wallet app: a teal balance card showing 48,250 baht, four quick-action buttons, and a list of recent transactions." loading="lazy">
+          <figcaption>The exact image the agent got back.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="bench">
+      <div class="wrap split split--flip">
+        <div class="copy">
+          <h2>Review like a team</h2>
+          <p>Pin a comment to any layer. Agents read open comments before they revise, reply when they’ve changed something, and resolve the thread.</p>
+          <p>Every change is a revision with an author: you, <code>claude-code</code>, <code>codex</code>. Preview any of them, compare against the live design, or restore it.</p>
+        </div>
+        <figure class="shot">
+          <img src="/shots/comments.png" width="1060" height="560" alt="The Tandem editor with the Comments panel open. The owner asked to add quick actions under the balance; codex replied that it added a four-button row." loading="lazy">
+          <figcaption><span class="mark mark--you" aria-hidden="true"></span>Your note on the balance card, and codex’s reply after it made the change.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="bench" id="connect">
+      <div class="wrap connect-grid">
+        <div class="copy">
+          <h2>Connect any agent</h2>
+          <p>On the machine running Tandem, one command registers it with your coding agent and gives that agent its own key, so its name appears on every change it makes.</p>
+          <div class="code">
+            <span class="code__label">terminal</span>
+<pre>tandem connect claude     <span class="c"># Claude Code</span>
+tandem connect codex      <span class="c"># Codex</span>
+tandem connect opencode   <span class="c"># opencode</span></pre>
+          </div>
+          <p class="after-code">For claude.ai, ChatGPT or Cursor, add a custom connector with this address. The app asks you to approve it once, and you can make it view-only.</p>
+          <div class="code">
+            <span class="code__label">connector URL</span>
+<pre>{{PUBLIC_URL}}/mcp</pre>
+          </div>
+        </div>
+        <figure class="shot consent">
+          <img src="/shots/consent.png" width="420" height="400" alt="An approval screen titled Connect Claude?, explaining that Claude's changes will show up as claude in the history, with a view-only option and Cancel and Allow buttons." loading="lazy">
+          <figcaption>What you see when an app asks to connect.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="bench bench--tight">
+      <div class="wrap">
+        <div class="copy"><h2>Runs on your machine</h2></div>
+        <dl class="spec">
+          <dt>Licence</dt><dd>MIT. Read it, fork it, host it.</dd>
+          <dt>Your data</dt><dd>Designs are files on your disk, with every revision kept. Nothing leaves your server unless you share a link.</dd>
+          <dt>Model</dt><dd>Frames, auto-layout (rows, columns, gap, padding, hug and fill), text, images, SVG icons, gradients and shadows. Export any frame as PNG, SVG or HTML with flexbox.</dd>
+          <dt>Sign-in</dt><dd>Google for the people you allow, OAuth for connector apps, named keys for coding agents.</dd>
+          <dt>Install it</dt><dd>Native Mac app, or install the web app: in Safari choose File → Add to Dock; on iPhone, Share → Add to Home Screen.</dd>
+          <dt>Host it</dt><dd><code>./scripts/install-service.sh</code> keeps it running on an always-on Mac; <code>./scripts/setup-tunnel.sh</code> puts it on your own domain through Cloudflare.</dd>
+        </dl>
+      </div>
+    </section>
+
+    <section class="wrap">
+      <div class="closing">
+        <p>Give your agents a canvas. Keep the final say.</p>
+        <a class="btn btn--primary" href="/login">Sign in</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="wrap footer">
+    <a class="wordmark" href="/"><img src="/icons/icon-192.png" alt="" width="26" height="26">tandem</a>
+    <span>Open-source design canvas for people and agents. MIT licence.</span>
+    <a href="/login">Sign in</a>
+  </footer>
+  <script src="/pwa.js" defer></script>
+</body>
+</html>

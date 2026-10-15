@@ -23,5 +23,6 @@ await build({
   bundle: true, platform: 'browser', format: 'esm', target: 'es2022', minify: true, sourcemap: false,
   logLevel: 'warning',
 });
-for (const f of ['index.html', 'style.css', 'icon.png']) fs.copyFileSync(path.join(root, 'src/web', f), path.join(dist, 'web', f));
+// copy the static web files (pages, styles, service worker, fonts, icons, screenshots); app.ts is bundled above
+fs.cpSync(path.join(root, 'src/web'), path.join(dist, 'web'), { recursive: true, filter: (f) => !f.endsWith('.ts') });
 console.log('built dist/server.js and dist/web/');

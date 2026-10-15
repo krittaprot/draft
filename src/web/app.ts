@@ -13,6 +13,12 @@ const $ = <T extends Element = HTMLElement>(s: string, root: ParentNode = docume
 const $$ = <T extends Element = HTMLElement>(s: string, root: ParentNode = document) => [...root.querySelectorAll(s)] as T[];
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 const SVGNS = 'http://www.w3.org/2000/svg';
+// The icon's story in the UI: teal is you (selection, handles), coral is agents (their changes), gold marks review pins.
+const YOU = '#0F6E56';
+const YOU_WASH = 'rgba(15,110,86,0.08)';
+const AGENT = '#D85A30';
+const PIN = '#EF9F27';
+const PIN_INK = '#412402';
 
 const S = {
   me: null as Me | null,
@@ -167,36 +173,38 @@ function drawOverlay() {
     const b = S.boxes.get(n.id);
     if (!b || n.visible === false) continue;
     const s = toScreen(b);
-    const label = svgEl('text', { x: s.x, y: s.y - 6, class: 'frame-label', 'data-label': n.id, fill: S.sel.includes(n.id) ? '#2563eb' : '#71717a', 'font-size': 11, style: 'cursor:default;user-select:none' }, n.name ?? n.id);
+    const label = svgEl('text', { x: s.x, y: s.y - 6, class: 'frame-label', 'data-label': n.id, fill: S.sel.includes(n.id) ? YOU : '#71717a', 'font-size': 11, style: 'cursor:default;user-select:none' }, n.name ?? n.id);
     ov.append(label);
   }
   // recent agent changes and review highlights
   const now = Date.now();
   const changed = new Set<string>(S.preview ? S.preview.changed : []);
   for (const [id, until] of S.flash) { if (until > now) changed.add(id); else S.flash.delete(id); }
-  for (const id of changed) {
+  // outline only the outermost changed layer: a new card shows as one box, not one per child
+  const outermost = [...changed].filter((id) => { let p = idx.get(id)?.parent; while (p) { if (changed.has(p.id)) return false; p = idx.get(p.id)?.parent; } return true; });
+  for (const id of outermost) {
     const b = S.boxes.get(id);
     if (!b) continue;
     const s = toScreen(b);
-    ov.append(svgEl('rect', { x: s.x - 2, y: s.y - 2, width: s.w + 4, height: s.h + 4, fill: 'none', stroke: '#f97316', 'stroke-width': 2, 'stroke-dasharray': '6 3', rx: 2 }));
+    ov.append(svgEl('rect', { x: s.x - 2, y: s.y - 2, width: s.w + 4, height: s.h + 4, fill: 'none', stroke: AGENT, 'stroke-width': 2, 'stroke-dasharray': '6 3', rx: 2 }));
   }
   if (S.hover && !S.sel.includes(S.hover)) {
     const b = S.boxes.get(S.hover);
-    if (b) { const s = toScreen(b); ov.append(svgEl('rect', { x: s.x, y: s.y, width: s.w, height: s.h, fill: 'none', stroke: '#2563eb', 'stroke-width': 1 })); }
+    if (b) { const s = toScreen(b); ov.append(svgEl('rect', { x: s.x, y: s.y, width: s.w, height: s.h, fill: 'none', stroke: YOU, 'stroke-width': 1 })); }
   }
   for (const id of S.sel) {
     const b = S.boxes.get(id);
     if (!b) continue;
     const s = toScreen(b);
-    ov.append(svgEl('rect', { x: s.x, y: s.y, width: s.w, height: s.h, fill: 'none', stroke: '#2563eb', 'stroke-width': 1.5 }));
+    ov.append(svgEl('rect', { x: s.x, y: s.y, width: s.w, height: s.h, fill: 'none', stroke: YOU, 'stroke-width': 1.5 }));
     const node = idx.get(id)?.node as TandemNode | undefined;
     if (S.sel.length === 1 && canEdit() && node && !node.locked) {
       for (const [h, hx, hy] of [['nw', s.x, s.y], ['ne', s.x + s.w, s.y], ['se', s.x + s.w, s.y + s.h], ['sw', s.x, s.y + s.h]] as const) {
-        ov.append(svgEl('rect', { x: hx - 4, y: hy - 4, width: 8, height: 8, fill: '#fff', stroke: '#2563eb', 'stroke-width': 1.5, 'data-handle': h, style: `cursor:${h === 'nw' || h === 'se' ? 'nwse' : 'nesw'}-resize` }));
+        ov.append(svgEl('rect', { x: hx - 4, y: hy - 4, width: 8, height: 8, fill: '#fff', stroke: YOU, 'stroke-width': 1.5, 'data-handle': h, style: `cursor:${h === 'nw' || h === 'se' ? 'nwse' : 'nesw'}-resize` }));
       }
       const dim = `${Math.round(b.w)} × ${Math.round(b.h)}`;
       const tw = dim.length * 6 + 10;
-      ov.append(svgEl('rect', { x: s.x + s.w / 2 - tw / 2, y: s.y + s.h + 6, width: tw, height: 16, rx: 3, fill: '#2563eb' }));
+      ov.append(svgEl('rect', { x: s.x + s.w / 2 - tw / 2, y: s.y + s.h + 6, width: tw, height: 16, rx: 3, fill: YOU }));
       ov.append(svgEl('text', { x: s.x + s.w / 2, y: s.y + s.h + 18, 'text-anchor': 'middle', 'font-size': 10, fill: '#fff' }, dim));
     }
   }
@@ -205,14 +213,14 @@ function drawOverlay() {
     const nb = c.nodeId ? S.boxes.get(c.nodeId) : null;
     const pos = toScreen({ x: nb ? Math.min(c.x, nb.x + nb.w) : c.x, y: nb ? Math.max(c.y, nb.y) : c.y, w: 0, h: 0 });
     const g = svgEl('g', { 'data-comment': c.id, style: 'cursor:pointer', transform: `translate(${pos.x} ${pos.y})` });
-    g.append(svgEl('path', { d: 'M0,0 h22 a6,6 0 0 1 6,6 v10 a6,6 0 0 1 -6,6 h-16 l-6,6 z', transform: 'translate(0 -28)', fill: c.resolved ? '#a1a1aa' : '#f97316', stroke: '#fff', 'stroke-width': 1.5 }));
-    g.append(svgEl('text', { x: 14, y: -13, 'text-anchor': 'middle', 'font-size': 10, 'font-weight': 700, fill: '#fff' }, (c.author[0] ?? '?').toUpperCase()));
+    g.append(svgEl('path', { d: 'M0,0 h22 a6,6 0 0 1 6,6 v10 a6,6 0 0 1 -6,6 h-16 l-6,6 z', transform: 'translate(0 -28)', fill: c.resolved ? '#a1a1aa' : PIN, stroke: '#fff', 'stroke-width': 1.5 }));
+    g.append(svgEl('text', { x: 14, y: -13, 'text-anchor': 'middle', 'font-size': 10, 'font-weight': 700, fill: c.resolved ? '#fff' : PIN_INK }, (c.author[0] ?? '?').toUpperCase()));
     ov.append(g);
   });
   if (S.drag?.kind === 'create' && S.drag.rect) {
     const r = S.drag.rect as Box;
     const s = toScreen(r);
-    ov.append(svgEl('rect', { x: s.x, y: s.y, width: s.w, height: s.h, fill: 'rgba(37,99,235,0.08)', stroke: '#2563eb', 'stroke-width': 1 }));
+    ov.append(svgEl('rect', { x: s.x, y: s.y, width: s.w, height: s.h, fill: YOU_WASH, stroke: YOU, 'stroke-width': 1 }));
   }
 }
 
@@ -251,7 +259,8 @@ function drawBanner() {
   const b = $('#banner');
   if (!S.preview) { b.hidden = true; return; }
   b.hidden = false;
-  b.innerHTML = `<span>Viewing revision ${S.preview.rev} by <b>${esc(S.preview.author)}</b>: ${esc(S.preview.message)}</span>${S.me?.role !== 'viewer' ? '<button class="btn small" data-restore>Restore this version</button>' : ''}<button class="btn small" data-exit-preview>Back to live</button>`;
+  const latest = S.preview.rev === S.live?.rev;
+  b.innerHTML = `<span>${latest ? 'Latest change' : `Viewing revision ${S.preview.rev}`} by <b>${esc(S.preview.author)}</b>: ${esc(S.preview.message)}</span>${S.me?.role !== 'viewer' && !latest ? '<button class="btn small" data-restore>Restore this version</button>' : ''}<button class="btn small" data-exit-preview>${latest ? 'Done' : 'Back to live'}</button>`;
 }
 
 // ---------------- right panel ----------------
@@ -377,7 +386,7 @@ function commentsPanel(): string {
 
 function historyPanel(): string {
   const agents = new Set(['owner', S.me?.name]);
-  return `<div class="panel-head"><span>Click a revision to review it. Orange outlines show what changed.</span></div>` + S.history.map((r) => `<div class="rev ${S.preview?.rev === r.rev ? 'active' : ''}" data-rev="${r.rev}">
+  return `<div class="panel-head"><span>Click a revision to review it. Coral outlines show what changed.</span></div>` + S.history.map((r) => `<div class="rev ${S.preview?.rev === r.rev ? 'active' : ''}" data-rev="${r.rev}">
     <div class="top"><span class="who ${agents.has(r.author) ? '' : 'agent'}">${esc(r.author)}</span><span class="when">#${r.rev} · ${ago(r.time)}</span></div>
     <div class="msg">${esc(r.message)}</div>${r.changed.length ? `<div class="when">${r.changed.length} layer${r.changed.length > 1 ? 's' : ''} changed</div>` : ''}</div>`).join('');
 }
@@ -466,9 +475,9 @@ async function previewRevision(rev: number) {
   if (!S.doc || !S.live) return;
   const meta = S.history.find((r) => r.rev === rev);
   if (!meta) return;
-  if (rev === S.live.rev) { exitPreview(); return; }
+  if (S.preview?.rev === rev) { exitPreview(); return; }
   S.preview = meta;
-  S.doc = await api<TandemDoc>(`/api/docs/${S.live.id}?rev=${rev}`);
+  S.doc = rev === S.live.rev ? S.live : await api<TandemDoc>(`/api/docs/${S.live.id}?rev=${rev}`);
   if (!S.doc.pages.some((p) => p.id === S.pageId)) S.pageId = S.doc.pages[0].id;
   const pageOfChange = meta.changed.map((id) => indexDoc(S.doc!).get(id)?.page.id).find(Boolean);
   if (pageOfChange) S.pageId = pageOfChange;
@@ -741,10 +750,34 @@ function toast(html: string, error = false) {
   setTimeout(() => el.remove(), 4200);
 }
 
-async function openDocs() {
-  const docs = await api<{ id: string; name: string; updated: string; rev: number }[]>('/api/docs');
-  $('#doc-list').innerHTML = docs.map((d) => `<li data-open="${esc(d.id)}"><span>${esc(d.name)}</span><span><span class="when">${ago(d.updated)} · rev ${d.rev}</span>${S.me?.role !== 'viewer' ? ` <button class="btn small ghost danger" data-del-doc="${esc(d.id)}">Delete</button>` : ''}</span></li>`).join('') || '<li class="meta">No documents yet.</li>';
-  $<HTMLDialogElement>('#docs-dialog').showModal();
+interface DocSummary { id: string; name: string; updated: string; rev: number; pages: { frames: unknown[] }[] }
+
+let homeTimer = 0;
+const homeOpen = () => !($('#home') as HTMLElement).hidden;
+
+async function showHome() {
+  ($('#home') as HTMLElement).hidden = false;
+  document.title = 'Your designs · Tandem';
+  ($('#home-new') as HTMLElement).hidden = S.me?.role === 'viewer';
+  const docs = await api<DocSummary[]>('/api/docs');
+  ($('#home-empty') as HTMLElement).hidden = docs.length > 0;
+  $('#home-grid').innerHTML = docs.map((d) => {
+    const frames = d.pages.reduce((a, p) => a + p.frames.length, 0);
+    return `<li><a class="home-card" href="#doc=${esc(d.id)}"><div class="home-thumb"><img src="/api/docs/${esc(d.id)}/thumb.png?rev=${d.rev}" alt="" loading="lazy"></div>
+      <div class="home-meta"><b>${esc(d.name)}</b><span>${ago(d.updated)} · ${frames} frame${frames === 1 ? '' : 's'} · rev ${d.rev}</span></div></a>
+      ${S.me?.role !== 'viewer' ? `<button class="btn small home-del" data-del-doc="${esc(d.id)}" aria-label="Delete ${esc(d.name)}">Delete</button>` : ''}</li>`;
+  }).join('');
+}
+
+/** #doc=<id>[&node=<id>] opens a design; anything else shows the home screen. */
+async function route() {
+  const hash = new URLSearchParams(location.hash.slice(1));
+  const docId = hash.get('doc');
+  if (!docId) { await showHome(); return; }
+  ($('#home') as HTMLElement).hidden = true;
+  if (S.live?.id !== docId) { S.preview = null; S.sel = []; await loadDoc(docId); }
+  const node = hash.get('node');
+  if (node && S.doc && indexDoc(S.doc).has(node)) selectNode(node, true);
 }
 
 async function openConnect() {
@@ -799,6 +832,7 @@ function connectEvents() {
   es.onerror = () => { live.classList.remove('on'); $('#live-text').textContent = 'Reconnecting…'; };
   es.onmessage = async (m) => {
     const ev = JSON.parse(m.data) as { type: string; docId?: string; rev?: number; author?: string; message?: string; changed?: string[] };
+    if (homeOpen() && (ev.type === 'docs' || ev.type === 'doc')) { clearTimeout(homeTimer); homeTimer = window.setTimeout(() => void showHome(), 400); }
     if (!S.doc) return;
     if (ev.type === 'comments' && ev.docId === S.live?.id) { await refreshComments(); return; }
     if (ev.type !== 'doc' || ev.docId !== S.live?.id || (S.live && ev.rev! <= S.live.rev)) return;
@@ -957,37 +991,31 @@ function wire() {
   nameInput.addEventListener('change', () => { if (nameInput.value.trim()) void ops([{ op: 'rename_doc', name: nameInput.value.trim() }], 'Renamed document'); });
   nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') nameInput.blur(); });
 
-  $('#docs-btn').addEventListener('click', () => void openDocs());
+  $('#docs-btn').addEventListener('click', () => { location.hash = ''; });
+  window.addEventListener('hashchange', () => void route());
+  $('#home-connect').addEventListener('click', () => void openConnect());
+  $('#home-grid').addEventListener('error', (e) => { (e.target as HTMLElement).closest('.home-thumb')?.classList.add('empty'); }, true);
+  $('#home-grid').addEventListener('load', (e) => { const img = e.target as HTMLImageElement; if (!img.naturalWidth) img.closest('.home-thumb')?.classList.add('empty'); }, true);
   $('#zoom-btn').addEventListener('click', () => zoomToFit());
   $('#connect-btn').addEventListener('click', () => void openConnect());
   $('#share-btn').addEventListener('click', () => void action(S.sel.length ? 'share-node' : 'share-page'));
   $$('dialog [data-close]').forEach((b) => b.addEventListener('click', () => (b.closest('dialog') as HTMLDialogElement).close()));
 
-  $('#new-doc').addEventListener('submit', async (e) => {
+  $('#home-new').addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = e.target as HTMLFormElement;
     const doc = await api<TandemDoc>('/api/docs', { method: 'POST', json: { name: (f.elements.namedItem('name') as HTMLInputElement).value } });
     f.reset();
-    $<HTMLDialogElement>('#docs-dialog').close();
-    S.preview = null; S.sel = [];
-    await loadDoc(doc.id);
+    location.hash = `doc=${doc.id}`;
   });
-  $('#doc-list').addEventListener('click', async (e) => {
-    const t = e.target as HTMLElement;
-    const del = t.closest<HTMLElement>('[data-del-doc]');
-    if (del) {
-      e.stopPropagation();
-      if (!confirm('Delete this document? It moves to the trash folder in the data directory.')) return;
-      await api(`/api/docs/${del.dataset.delDoc}`, { method: 'DELETE' });
-      if (S.live?.id === del.dataset.delDoc) { S.doc = S.live = null; }
-      await openDocs();
-      return;
-    }
-    const li = t.closest<HTMLElement>('[data-open]');
-    if (!li) return;
-    $<HTMLDialogElement>('#docs-dialog').close();
-    S.preview = null; S.sel = [];
-    await loadDoc(li.dataset.open!);
+  $('#home-grid').addEventListener('click', async (e) => {
+    const del = (e.target as HTMLElement).closest<HTMLElement>('[data-del-doc]');
+    if (!del) return;
+    e.preventDefault();
+    if (!confirm('Delete this design? It moves to the trash folder in the data directory, so it can be recovered.')) return;
+    await api(`/api/docs/${del.dataset.delDoc}`, { method: 'DELETE' });
+    if (S.live?.id === del.dataset.delDoc) { S.doc = S.live = null; }
+    await showHome();
   });
 
   $('#connect-body').addEventListener('submit', async (e) => {
@@ -1058,16 +1086,7 @@ async function boot() {
   wire();
   setTool('select');
   connectEvents();
-  const hash = new URLSearchParams(location.hash.slice(1));
-  let docId = hash.get('doc');
-  if (!docId) {
-    const docs = await api<{ id: string }[]>('/api/docs');
-    docId = docs[0]?.id ?? (S.me.role !== 'viewer' ? (await api<TandemDoc>('/api/docs', { method: 'POST', json: { name: 'Untitled' } })).id : null);
-  }
-  if (!docId) { toast('No documents yet.'); return; }
-  await loadDoc(docId);
-  const node = hash.get('node');
-  if (node && S.doc && indexDoc(S.doc).has(node)) selectNode(node, true);
+  await route();
 }
 
 boot().catch((e) => toast(`Failed to start: ${esc((e as Error).message)}`, true));

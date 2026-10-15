@@ -4,13 +4,39 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Tandem</title>
-  <link rel="icon" href="/icon.png">
+  <link rel="icon" href="/icons/icon-192.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <meta name="theme-color" content="#f8f6f1">
+  <meta name="apple-mobile-web-app-title" content="Tandem">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
+  <section id="home" hidden aria-label="Your designs">
+    <header class="home-top">
+      <a class="home-mark" href="#"><img src="/icons/icon-192.png" width="28" height="28" alt="">tandem</a>
+      <div class="group">
+        <button id="home-connect" class="btn">Connect agent</button>
+        <a class="btn ghost" href="/logout">Sign out</a>
+      </div>
+    </header>
+    <div class="home-body">
+      <div class="home-head">
+        <h1>Your designs</h1>
+        <form id="home-new" class="home-new"><input name="name" placeholder="Name a new design" aria-label="New design name" required><button class="btn primary">New design</button></form>
+      </div>
+      <ul id="home-grid" class="home-grid"></ul>
+      <div id="home-empty" class="home-empty" hidden>
+        <h2>No designs yet</h2>
+        <p>Name one above, or ask a connected agent: “Create a Tandem document for our onboarding flow and design the first screen.”</p>
+      </div>
+    </div>
+  </section>
   <header id="topbar">
     <div class="group">
-      <button id="docs-btn" class="icon-btn" title="Documents">
+      <button id="docs-btn" class="icon-btn" title="All designs">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
       </button>
       <input id="doc-name" spellcheck="false" aria-label="Document name">
@@ -71,11 +97,6 @@
     <div id="panel"></div>
   </aside>
 
-  <dialog id="docs-dialog">
-    <div class="dialog-head"><h2>Documents</h2><button class="icon-btn" data-close>✕</button></div>
-    <form id="new-doc" class="row"><input name="name" placeholder="New document name" required><button class="btn primary">Create</button></form>
-    <ul id="doc-list" class="doc-list"></ul>
-  </dialog>
 
   <dialog id="connect-dialog">
     <div class="dialog-head"><h2>Connect an agent</h2><button class="icon-btn" data-close>✕</button></div>
@@ -83,5 +104,6 @@
   </dialog>
 
   <script type="module" src="/app.js"></script>
+  <script src="/pwa.js" defer></script>
 </body>
 </html>

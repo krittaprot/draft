@@ -182,3 +182,33 @@ test('stdio bridge exposes the same tools (for clients without HTTP MCP)', async
   assert.match(docs, /Landing/);
   await c.close();
 });
+
+test('signed-out visitors get the homepage; the app is installable', async () => {
+  const home = await fetch(`${base}/`, { redirect: 'manual' });
+  assert.equal(home.status, 200);
+  const html = await home.text();
+  assert.match(html, /Your agents design\./);
+  assert.match(html, new RegExp(`${base.replace(/[.:/]/g, '\\$&')}/mcp`), 'connector URL uses this server');
+  assert.match(home.headers.get('content-security-policy'), /script-src 'self'/);
+  const manifest = await (await fetch(`${base}/manifest.webmanifest`)).json();
+  assert.equal(manifest.display, 'standalone');
+  assert.ok(manifest.icons.some((i) => i.purpose === 'maskable'));
+  for (const p of ['/sw.js', '/pwa.js', '/icons/apple-touch-icon.png', '/fonts/Geist-Variable.woff2', '/landing.css', '/tokens.css', '/offline.html']) {
+    assert.equal((await fetch(`${base}${p}`)).status, 200, p);
+  }
+  for (const p of ['/../auth.json', '/fonts/../../auth.json', '/icons/..%2F..%2Fauth.json', '/app.ts']) {
+    assert.equal((await fetch(`${base}${p}`)).status, 404, p);
+  }
+});
+
+test('home screen thumbnails: a picture for designs, nothing for empty ones', async () => {
+  const h = { authorization: `Bearer ${owner}`, 'content-type': 'application/json' };
+  const empty = await (await fetch(`${base}/api/docs`, { method: 'POST', headers: h, body: JSON.stringify({ name: 'Blank' }) })).json();
+  assert.equal((await fetch(`${base}/api/docs/${empty.id}/thumb.png`, { headers: h })).status, 204);
+  const docs = await (await fetch(`${base}/api/docs`, { headers: h })).json();
+  const full = docs.find((d) => d.name === 'Landing');
+  const r = await fetch(`${base}/api/docs/${full.id}/thumb.png`, { headers: h });
+  assert.equal(r.status, 200);
+  assert.equal(r.headers.get('content-type'), 'image/png');
+  assert.equal((await fetch(`${base}/api/docs/${full.id}/thumb.png`)).status, 401, 'needs sign-in');
+});
