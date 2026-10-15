@@ -750,17 +750,31 @@ async function openDocs() {
 async function openConnect() {
   const base = S.me!.publicUrl;
   const body = $('#connect-body');
-  const tokenRows = S.me!.role === 'owner' ? await api<{ name: string; role: string; created: string; lastUsed?: string }[]>('/api/tokens') : [];
+  const owner = S.me!.role === 'owner';
+  const [tokenRows, apps, people] = owner
+    ? await Promise.all([
+      api<{ name: string; role: string; created: string; lastUsed?: string }[]>('/api/tokens'),
+      api<{ id: string; app: string; name: string; role: string; approvedBy: string; lastUsed?: string; redirect: string }[]>('/api/apps'),
+      api<{ members: { email: string; name: string; role: string; lastSeen?: string }[]; google: boolean }>('/api/members'),
+    ])
+    : [[], [], { members: [], google: false }];
   body.innerHTML = `<div class="connect">
-    <p>Agents connect over MCP at <code>${esc(base)}/mcp</code> with a bearer token. Each agent gets its own token, so its name shows on every change it makes.</p>
-    ${S.me!.role === 'owner' ? `<form id="new-token" class="row" style="justify-content:flex-start"><input name="name" placeholder="token name, e.g. claude-code" pattern="[a-z0-9][a-z0-9._-]{0,39}" required><select name="role"><option>editor</option><option>viewer</option></select><button class="btn primary">Create token</button></form><div id="token-out"></div>` : '<p>Ask the owner for a token.</p>'}
-    <h3>On the Tandem host (one command per agent)</h3>
+    <h3>Apps with sign-in (claude.ai, ChatGPT, Cursor…)</h3>
+    <p>Add a custom connector with this URL. The app asks you to approve it here; nothing to copy.</p>
+    <pre class="cmd">${esc(base)}/mcp</pre>
+    ${apps.length ? `<table class="tokens">${apps.map((a) => `<tr><td><b>${esc(a.app)}</b> <span class="meta">as ${esc(a.name)}</span></td><td>${a.role}</td><td class="meta">${a.lastUsed ? 'used ' + ago(a.lastUsed) : 'not used yet'} · approved by ${esc(a.approvedBy)}</td><td><button class="btn small ghost danger" data-revoke-app="${esc(a.id)}">Disconnect</button></td></tr>`).join('')}</table>` : ''}
+    <h3>Coding agents on the Tandem host (one command each)</h3>
     <pre class="cmd">tandem connect claude\ntandem connect codex\ntandem connect opencode</pre>
-    <h3>Anywhere else</h3><p>Create a token above, then:</p>
+    <h3>Coding agents elsewhere</h3>
+    ${owner ? `<p>Create a token for each agent; its name shows on every change it makes.</p><form id="new-token" class="row" style="justify-content:flex-start"><input name="name" placeholder="token name, e.g. claude-code" pattern="[a-z0-9][a-z0-9._-]{0,39}" required><select name="role"><option>editor</option><option>viewer</option></select><button class="btn primary">Create token</button></form><div id="token-out"></div>` : '<p>Ask the owner for a token.</p>'}
     <pre class="cmd" id="cmds">${esc(connectCommands(base, '<TOKEN>'))}</pre>
     ${tokenRows.length ? `<h3>Tokens</h3><table class="tokens">${tokenRows.map((t) => `<tr><td><b>${esc(t.name)}</b></td><td>${t.role}</td><td class="meta">${t.lastUsed ? 'used ' + ago(t.lastUsed) : 'never used'}</td><td>${t.role === 'owner' && t.name === 'owner' ? '' : `<button class="btn small ghost danger" data-revoke="${esc(t.name)}">Revoke</button>`}</td></tr>`).join('')}</table>` : ''}
+    ${owner ? `<h3>People</h3><p>${people.google ? 'These people can sign in with Google.' : 'Google sign-in is off on this server (set TANDEM_NEON_AUTH_URL). People below can sign in once it is on.'}</p>
+    <form id="new-member" class="row" style="justify-content:flex-start"><input name="email" type="email" placeholder="name@example.com" required><select name="role"><option>editor</option><option>viewer</option><option>owner</option></select><button class="btn">Add person</button></form>
+    ${people.members.length ? `<table class="tokens">${people.members.map((m) => `<tr><td><b>${esc(m.name)}</b> <span class="meta">${esc(m.email)}</span></td><td>${m.role}</td><td class="meta">${m.lastSeen ? 'seen ' + ago(m.lastSeen) : 'not signed in yet'}</td><td><button class="btn small ghost danger" data-remove-member="${esc(m.email)}">Remove</button></td></tr>`).join('')}</table>` : ''}` : ''}
   </div>`;
-  $<HTMLDialogElement>('#connect-dialog').showModal();
+  const d = $<HTMLDialogElement>('#connect-dialog');
+  if (!d.open) d.showModal();
 }
 
 function connectCommands(base: string, tok: string) {
@@ -979,6 +993,13 @@ function wire() {
   $('#connect-body').addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = e.target as HTMLFormElement;
+    if (f.id === 'new-member') {
+      try {
+        await api('/api/members', { method: 'POST', json: { email: (f.elements.namedItem('email') as HTMLInputElement).value, role: (f.elements.namedItem('role') as HTMLSelectElement).value } });
+        await openConnect();
+      } catch (err) { toast(esc((err as Error).message), true); }
+      return;
+    }
     const name = (f.elements.namedItem('name') as HTMLInputElement).value;
     const role = (f.elements.namedItem('role') as HTMLSelectElement).value;
     try {
@@ -989,7 +1010,12 @@ function wire() {
     } catch (err) { toast(esc((err as Error).message), true); }
   });
   $('#connect-body').addEventListener('click', async (e) => {
-    const t = (e.target as HTMLElement).closest<HTMLElement>('[data-revoke]');
+    const el = e.target as HTMLElement;
+    const app = el.closest<HTMLElement>('[data-revoke-app]');
+    if (app) { if (confirm('Disconnect this app? It loses access immediately.')) { await api(`/api/apps/${app.dataset.revokeApp}`, { method: 'DELETE' }); await openConnect(); } return; }
+    const mem = el.closest<HTMLElement>('[data-remove-member]');
+    if (mem) { if (confirm(`Remove ${mem.dataset.removeMember}? They are signed out everywhere.`)) { await api(`/api/members/${encodeURIComponent(mem.dataset.removeMember!)}`, { method: 'DELETE' }); await openConnect(); } return; }
+    const t = el.closest<HTMLElement>('[data-revoke]');
     if (!t || !confirm(`Revoke ${t.dataset.revoke}? Agents using it lose access immediately.`)) return;
     await api(`/api/tokens/${t.dataset.revoke}`, { method: 'DELETE' });
     await openConnect();

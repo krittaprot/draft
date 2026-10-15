@@ -8,6 +8,7 @@ import { Store } from './store.ts';
 import { Auth, type Role } from './auth.ts';
 import { Engine } from './engine.ts';
 import { createHttpServer } from './http.ts';
+import { NeonLogin } from './neon.ts';
 import { VERSION } from './mcp.ts';
 
 const HELP = `tandem ${VERSION} — an open design canvas for AI agents
@@ -17,11 +18,15 @@ Usage:
   tandem token create <name> [--role editor|viewer|owner]
   tandem token list
   tandem token revoke <name>
+  tandem member add <email> [--role editor|viewer|owner] [--name NAME]
+  tandem member list
+  tandem member remove <email>
   tandem connect <claude|codex|opencode> [--url URL] [--token TOKEN]
   tandem stdio [--url URL]          MCP over stdio, forwarding to a running Tandem server
   tandem info
 
-Environment: TANDEM_PORT, TANDEM_HOST, TANDEM_DATA, TANDEM_PUBLIC_URL, TANDEM_TOKEN.
+Environment: TANDEM_PORT, TANDEM_HOST, TANDEM_DATA, TANDEM_PUBLIC_URL, TANDEM_TOKEN,
+TANDEM_NEON_AUTH_URL (enables "Continue with Google" for members, via Neon Auth).
 Data defaults to ~/.local/share/tandem/data.`;
 
 function args(argv: string[]) {
@@ -73,9 +78,12 @@ async function serve() {
   const auth = new Auth(dataDir);
   const owner = auth.ensureOwner();
   const engine = new Engine(store, auth, publicUrl);
-  const server = createHttpServer(engine, { trustProxy: true });
+  const neonUrl = flags['neon-auth-url'] ?? process.env.TANDEM_NEON_AUTH_URL;
+  const neon = neonUrl ? new NeonLogin(neonUrl, publicUrl) : undefined;
+  const server = createHttpServer(engine, { trustProxy: true, neon });
   server.listen(port, host, () => {
     console.log(`Tandem ${VERSION} listening on ${localUrl} (public URL ${publicUrl}), data in ${dataDir}`);
+    if (neon) console.log(`Google sign-in via Neon Auth is on; ${auth.members().length} member(s) allowed (tandem member add <email>)`);
     if (owner) console.log(`Created the owner token (shown once, also saved to ${path.join(dataDir, 'owner-token')}):\n  ${owner}`);
   });
   const stop = () => { server.close(); process.exit(0); };
@@ -153,6 +161,24 @@ async function stdio() {
   await server.connect(new StdioServerTransport());
 }
 
+function member() {
+  const auth = new Auth((fs.mkdirSync(dataDir, { recursive: true }), dataDir));
+  const [, sub, email] = pos;
+  if (sub === 'add') {
+    if (!email) die('usage: tandem member add <email> [--role editor|viewer|owner] [--name NAME]');
+    const role = (flags.role ?? 'editor') as Role;
+    if (!['editor', 'viewer', 'owner'].includes(role)) die('role must be editor, viewer or owner');
+    const m = auth.addMember(email, role, flags.name);
+    console.log(`${m.email} can now sign in with Google as ${m.role} (shown as "${m.name}")`);
+  } else if (sub === 'list') {
+    for (const m of auth.members()) console.log(`${m.email.padEnd(32)} ${m.role.padEnd(7)} ${m.name}${m.lastSeen ? `, last seen ${m.lastSeen.slice(0, 10)}` : ''}`);
+  } else if (sub === 'remove') {
+    if (!email) die('usage: tandem member remove <email>');
+    auth.removeMember(email);
+    console.log(`removed ${email}`);
+  } else die(HELP);
+}
+
 function info() {
   console.log(`version     ${VERSION}\ndata        ${dataDir}\nlocal URL   ${localUrl}\npublic URL  ${publicUrl}\nowner token ${path.join(dataDir, 'owner-token')}`);
 }
@@ -160,6 +186,7 @@ function info() {
 switch (pos[0]) {
   case 'serve': await serve(); break;
   case 'token': token(); break;
+  case 'member': member(); break;
   case 'connect': connect(); break;
   case 'stdio': await stdio(); break;
   case 'info': info(); break;

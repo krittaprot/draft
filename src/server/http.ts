@@ -10,6 +10,8 @@ import { OpError, type Op } from './ops.ts';
 import type { Engine } from './engine.ts';
 import type { Principal, Role } from './auth.ts';
 import type { ChangeEvent, Comment } from './store.ts';
+import { OAuth, OAuthError, appName as appNameFor } from './oauth.ts';
+import type { NeonLogin } from './neon.ts';
 
 const WEB_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'web');
 const STATIC: Record<string, string> = { '/app.js': 'text/javascript', '/style.css': 'text/css', '/icon.png': 'image/png' };
@@ -46,18 +48,35 @@ function cookies(req: http.IncomingMessage): Record<string, string> {
   return out;
 }
 
-function send(res: http.ServerResponse, status: number, body: unknown, type = 'application/json') {
+function send(res: http.ServerResponse, status: number, body: unknown, type = 'application/json', extra: Record<string, string> = {}) {
   const data = Buffer.isBuffer(body) ? body : typeof body === 'string' ? body : JSON.stringify(body);
-  res.writeHead(status, { 'content-type': type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+  res.writeHead(status, { 'content-type': type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', ...extra });
   res.end(data);
 }
 
-const LOGIN_PAGE = (error = '') => `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tandem · Sign in</title><link rel="icon" href="/icon.png"><link rel="stylesheet" href="/style.css"></head>
-<body class="login"><form method="post" action="/login"><img src="/icon.png" width="48" height="48" alt=""><h1>Tandem</h1><p>Paste an access token. Run <code>tandem token create &lt;name&gt;</code> on the host to make one.</p>
-${error ? `<p class="error">${error}</p>` : ''}<input name="token" type="password" placeholder="tandem_…" autocomplete="current-password" autofocus required><button>Sign in</button></form></body></html>`;
+const escHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
-export function createHttpServer(engine: Engine, opts: { trustProxy: boolean }) {
+const PAGE = (title: string, body: string) => `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escHtml(title)}</title><link rel="icon" href="/icon.png"><link rel="stylesheet" href="/style.css"></head><body class="login">${body}</body></html>`;
+
+const GOOGLE_ICON = '<svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4 7.1-10 7.1-17.5z"/><path fill="#FBBC05" d="M10.6 28.6A14.6 14.6 0 0 1 9.5 24c0-1.6.3-3.2.8-4.6l-7.9-6.1A24 24 0 0 0 0 24c0 3.9.9 7.5 2.7 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.5-5.8c-2.1 1.4-4.8 2.3-8.4 2.3-6.2 0-11.5-4.1-13.4-9.8l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>';
+
+const LOGIN_PAGE = (opts: { error?: string; next?: string; google?: boolean } = {}) => PAGE('Tandem · Sign in', `<form method="post" action="/login"><img src="/icon.png" width="56" height="56" alt=""><h1>Tandem</h1>
+${opts.error ? `<p class="error">${escHtml(opts.error)}</p>` : ''}
+${opts.google ? `<a class="google" href="/auth/google?next=${encodeURIComponent(opts.next ?? '/')}">${GOOGLE_ICON}<span>Continue with Google</span></a><div class="or"><span>or use an access token</span></div>` : '<p>Paste an access token. Run <code>tandem token create &lt;name&gt;</code> on the host to make one.</p>'}
+<input type="hidden" name="next" value="${escHtml(opts.next ?? '/')}"><input name="token" type="password" placeholder="tandem_…" autocomplete="current-password" ${opts.google ? '' : 'autofocus'} required><button>Sign in</button></form>`);
+
+/** Only same-site paths may be used as a post-login destination. */
+function safeNext(n: string | null | undefined): string {
+  return n && n.startsWith('/') && !n.startsWith('//') && !n.startsWith('/\\') ? n : '/';
+}
+
+const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'GET, POST, OPTIONS', 'access-control-allow-headers': 'content-type, authorization, mcp-protocol-version', 'access-control-max-age': '86400' };
+
+export function createHttpServer(engine: Engine, opts: { trustProxy: boolean; neon?: NeonLogin }) {
   const { store, auth } = engine;
+  const oauth = new OAuth(store.dir, engine.publicUrl);
+  auth.oauthVerify = (t) => oauth.verifyAccess(t);
+  const metaUrl = `${engine.publicUrl}/.well-known/oauth-protected-resource/mcp`;
   const sse = new Set<http.ServerResponse>();
   store.on('change', (e: ChangeEvent) => {
     const msg = `data: ${JSON.stringify(e)}\n\n`;
@@ -108,8 +127,10 @@ export function createHttpServer(engine: Engine, opts: { trustProxy: boolean }) 
     const tok = bearer(req);
     const p = tok ? auth.verify(tok, clientIp(req)) : null;
     if (!p) {
-      res.writeHead(401, { 'content-type': 'application/json', 'www-authenticate': 'Bearer realm="tandem"' });
-      res.end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32001, message: 'Missing or invalid bearer token. Create one with: tandem token create <name>' }, id: null }));
+      // points OAuth-capable clients at discovery (MCP authorization spec); token users see the hint
+      const challenge = `Bearer resource_metadata="${metaUrl}", scope="tandem"${tok ? ', error="invalid_token"' : ''}`;
+      res.writeHead(401, { 'content-type': 'application/json', 'www-authenticate': challenge, ...CORS, 'access-control-expose-headers': 'www-authenticate' });
+      res.end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32001, message: 'Missing or invalid bearer token. Sign in with OAuth, or create a token with: tandem token create <name>' }, id: null }));
       return;
     }
     if (req.method !== 'POST') {
@@ -122,6 +143,77 @@ export function createHttpServer(engine: Engine, opts: { trustProxy: boolean }) 
     res.on('close', () => { void transport.close(); void server.close(); });
     await server.connect(transport);
     await transport.handleRequest(req, res, body);
+  }
+
+  async function handleOAuth(req: http.IncomingMessage, res: http.ServerResponse, url: URL) {
+    const pth = url.pathname;
+    const fail = (e: unknown, cors = true) => {
+      const err = e instanceof OAuthError ? e : new OAuthError('server_error', 'unexpected error', 500);
+      if (!(e instanceof OAuthError)) console.error(e);
+      return send(res, err.status, { error: err.code, error_description: err.message }, 'application/json', cors ? CORS : {});
+    };
+    if (req.method === 'OPTIONS') { res.writeHead(204, CORS).end(); return; }
+
+    if (pth === '/oauth/register' && req.method === 'POST') {
+      try { return send(res, 201, oauth.register(await readJson(req), clientIp(req)), 'application/json', CORS); } catch (e) { return fail(e); }
+    }
+    if (pth === '/oauth/token' && req.method === 'POST') {
+      const raw = (await readBody(req)).toString('utf8');
+      const form = String(req.headers['content-type'] ?? '').includes('json') ? new URLSearchParams(JSON.parse(raw || '{}')) : new URLSearchParams(raw);
+      try { return send(res, 200, oauth.token(form), 'application/json', { ...CORS, pragma: 'no-cache' }); } catch (e) { return fail(e); }
+    }
+    if (pth === '/oauth/revoke' && req.method === 'POST') {
+      oauth.revokeToken(new URLSearchParams((await readBody(req)).toString('utf8')).get('token') ?? '');
+      return send(res, 200, {}, 'application/json', CORS);
+    }
+    if (pth === '/oauth/authorize') {
+      const page = (title: string, body: string, status = 200) => {
+        res.writeHead(status, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-frame-options': 'DENY', 'content-security-policy': "default-src 'self'; style-src 'self'; img-src 'self' data:; frame-ancestors 'none'" });
+        res.end(PAGE(title, body));
+      };
+      const errorPage = (msg: string) => page('Tandem · Connect', `<form><img src="/icon.png" width="56" height="56" alt=""><h1>Can't connect this app</h1><p class="error">${escHtml(msg)}</p></form>`, 400);
+      const redirect = (to: string) => { res.writeHead(303, { location: to }).end(); };
+
+      const isPost = req.method === 'POST';
+      const form = isPost ? new URLSearchParams((await readBody(req)).toString('utf8')) : null;
+      let qs = url.search.slice(1);
+      const who = auth.verifySession(cookies(req).tandem_session);
+      if (isPost) {
+        // the consent form carries the original request, signed and bound to the person who saw it
+        const [encoded, exp, sig] = (form!.get('tx') ?? '').split('.');
+        qs = Buffer.from(encoded ?? '', 'base64url').toString();
+        if (!who || !sig || Number(exp) < Date.now() || !auth.verifySigned('consent', `${who.name}|${who.email ?? ''}|${qs}|${exp}`, sig)) {
+          return errorPage('This approval page expired. Go back to the app and connect again.');
+        }
+      }
+      let areq;
+      try { areq = oauth.parseAuthorize(new URLSearchParams(qs)); } catch (e) {
+        const r = (e as { redirect?: { redirectUri: string; state?: string } }).redirect;
+        if (e instanceof OAuthError && r) {
+          try { return redirect(oauth.redirectWith(r.redirectUri, { error: e.code, error_description: e.message, state: r.state })); } catch { /* fall through */ }
+        }
+        return errorPage(e instanceof Error ? e.message : String(e));
+      }
+      if (!who) return redirect(`/login?next=${encodeURIComponent(`/oauth/authorize?${qs}`)}`);
+      if (isPost) {
+        if (form!.get('decision') !== 'allow') return redirect(oauth.redirectWith(areq.redirectUri, { error: 'access_denied', error_description: 'The person declined.', state: areq.state }));
+        return redirect(oauth.approve(areq, who, form!.get('readonly') === 'on'));
+      }
+      const exp = String(Date.now() + 10 * 60_000);
+      const tx = `${Buffer.from(qs).toString('base64url')}.${exp}.${auth.sign('consent', `${who.name}|${who.email ?? ''}|${qs}|${exp}`)}`;
+      let host = areq.redirectUri;
+      try { host = new URL(areq.redirectUri).host || areq.redirectUri; } catch { /* keep */ }
+      const viewerOnly = who.role === 'viewer';
+      return page('Tandem · Connect', `<form method="post" action="/oauth/authorize" class="consent"><img src="/icon.png" width="56" height="56" alt="">
+<h1>Connect ${escHtml(areq.client.client_name)}?</h1>
+<p><b>${escHtml(areq.client.client_name)}</b> wants to use your Tandem designs. Its changes will show up as <b>${escHtml(appNameFor(areq.client.client_name))}</b> in the history.</p>
+<p class="meta">After you approve, you go back to <b>${escHtml(host)}</b>. You can disconnect it any time under Connect agent.</p>
+<label class="check"><input type="checkbox" name="readonly" ${viewerOnly ? 'checked disabled' : ''}> View only (it can look and take screenshots, but not edit)</label>
+<p class="meta">Signed in as ${escHtml(who.email ?? who.name)}</p>
+<input type="hidden" name="tx" value="${escHtml(tx)}">
+<div class="row"><button name="decision" value="deny" class="secondary">Cancel</button><button name="decision" value="allow">Allow</button></div></form>`);
+    }
+    return fail(new OAuthError('not_found', 'not found', 404));
   }
 
   async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, url: URL) {
@@ -141,6 +233,23 @@ export function createHttpServer(engine: Engine, opts: { trustProxy: boolean }) 
       sse.add(res);
       req.on('close', () => sse.delete(res));
       return;
+    }
+
+    if (parts[0] === 'members') {
+      need(p, 'owner');
+      if (method === 'GET') return json({ members: auth.members(), google: !!opts.neon });
+      if (method === 'POST') {
+        const b = await readJson(req);
+        const role = (['editor', 'viewer', 'owner'] as Role[]).includes(b.role as Role) ? (b.role as Role) : 'editor';
+        return json(auth.addMember(String(b.email ?? ''), role, b.name ? String(b.name) : undefined));
+      }
+      if (method === 'DELETE' && parts[1]) { auth.removeMember(decodeURIComponent(parts[1])); return json({ ok: true }); }
+    }
+
+    if (parts[0] === 'apps') {
+      need(p, 'owner');
+      if (method === 'GET') return json(oauth.listGrants());
+      if (method === 'DELETE' && parts[1]) { oauth.revokeGrant(parts[1]); return json({ ok: true }); }
     }
 
     if (parts[0] === 'tokens') {
@@ -240,16 +349,49 @@ export function createHttpServer(engine: Engine, opts: { trustProxy: boolean }) 
       if (pth.startsWith('/api/')) return await handleApi(req, res, url);
 
       if (pth === '/login') {
+        const google = !!opts.neon;
         if (req.method === 'POST') {
           const form = new URLSearchParams((await readBody(req)).toString('utf8'));
-          const p = auth.verify(form.get('token') ?? '', clientIp(req));
-          if (!p) return send(res, 401, LOGIN_PAGE(auth.blocked(clientIp(req)) ? 'Too many attempts. Try again in 10 minutes.' : 'That token is not valid.'), 'text/html');
+          const next = safeNext(form.get('next'));
+          const tok = form.get('token') ?? '';
+          const p = tok.startsWith('tandem_at_') ? null : auth.verify(tok, clientIp(req));
+          if (!p) return send(res, 401, LOGIN_PAGE({ error: auth.blocked(clientIp(req)) ? 'Too many attempts. Try again in 10 minutes.' : 'That token is not valid.', next, google }), 'text/html');
           setSession(req, res, p);
-          res.writeHead(303, { location: '/' }).end();
+          res.writeHead(303, { location: next }).end();
           return;
         }
-        return send(res, 200, LOGIN_PAGE(), 'text/html');
+        return send(res, 200, LOGIN_PAGE({ next: safeNext(url.searchParams.get('next')), google, error: url.searchParams.get('error') ?? undefined }), 'text/html');
       }
+
+      if (pth === '/auth/google' && opts.neon) {
+        const next = safeNext(url.searchParams.get('next'));
+        let flowId: string, to: string;
+        try { ({ flowId, url: to } = await opts.neon.start(next)); } catch (e) {
+          console.error(e);
+          res.writeHead(303, { location: `/login?error=${encodeURIComponent("Google sign-in isn't available right now. Use an access token, or try again later.")}&next=${encodeURIComponent(next)}` }).end();
+          return;
+        }
+        res.writeHead(303, { location: to, 'set-cookie': `tandem_flow=${flowId}; Path=/auth/neon; HttpOnly; SameSite=Lax; Max-Age=600${secure(req) ? '; Secure' : ''}` }).end();
+        return;
+      }
+      if (pth === '/auth/neon/callback' && opts.neon) {
+        const clear = 'tandem_flow=; Path=/auth/neon; Max-Age=0';
+        const back = (msg: string, next = '/') => res.writeHead(303, { location: `/login?error=${encodeURIComponent(msg)}&next=${encodeURIComponent(next)}`, 'set-cookie': clear }).end();
+        let result;
+        try { result = await opts.neon.finish(cookies(req).tandem_flow, url.searchParams.get('neon_auth_session_verifier')); } catch (e) { back((e as Error).message); return; }
+        const p = auth.memberLogin(result.user.email);
+        if (!p) { back(`${result.user.email} is not a member of this Tandem. Ask the owner to add you.`, result.next); return; }
+        res.setHeader('set-cookie', [clear]);
+        setSession(req, res, p);
+        res.writeHead(303, { location: result.next }).end();
+        return;
+      }
+
+      // ---------- OAuth for MCP clients ----------
+      if (pth.startsWith('/.well-known/oauth-protected-resource')) return send(res, 200, oauth.protectedResourceMetadata(), 'application/json', CORS);
+      if (pth.startsWith('/.well-known/oauth-authorization-server') || pth === '/.well-known/openid-configuration') return send(res, 200, oauth.authorizationServerMetadata(), 'application/json', CORS);
+      if (pth.startsWith('/oauth/')) return await handleOAuth(req, res, url);
+
       if (pth === '/auth') {
         // used by the Mac app to sign in with the local owner token
         const p = auth.verify(url.searchParams.get('token') ?? '', clientIp(req));

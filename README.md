@@ -18,6 +18,12 @@ Needs Node.js 20+ and pnpm.
 
 This builds `~/Applications/Tandem.app` and the `tandem` command in `~/.local/bin`. Nothing starts on its own. Open Tandem.app: it uses a Tandem server already running at `http://127.0.0.1:3290`, or starts its bundled one while the app is open. Data lives in `~/.local/share/tandem/data`. To point the app at another server (e.g. your Mac mini), use Tandem → Settings….
 
+## Sign-in
+
+- **People** sign in with Google through [Neon Auth](https://neon.com/docs/auth/overview) when `TANDEM_NEON_AUTH_URL` is set (add your public URL as a trusted domain in Neon). Only emails you allow get in: `tandem member add you@example.com --role owner`, or the People list under Connect agent. Without Neon, people sign in with an access token.
+- **Apps with OAuth** (claude.ai and ChatGPT custom connectors, Cursor, MCP Inspector…) only need the URL `https://<host>/mcp`. Tandem follows the MCP authorization spec: discovery, dynamic client registration, authorization code with PKCE, and rotating refresh tokens. A signed-in person approves each app on a consent page, optionally view-only, and the app's changes carry its name. Disconnect apps under Connect agent.
+- **Coding agents** use named access tokens (below).
+
 ## Connect agents
 
 On the machine running Tandem, one command per agent creates a token named after it and registers the MCP server:
@@ -65,4 +71,4 @@ node dist/server.js serve --port 3291 --data /tmp/tandem-dev
 
 Layout: `src/shared` (model, layout engine, text metrics, SVG renderer shared by server and browser), `src/server` (store, ops, auth, MCP tools, HTTP), `src/web` (editor), `mac/` (Swift wrapper), `scripts/` (build, install, deploy).
 
-Known limits: text measurement uses Helvetica metrics, so other fonts may wrap slightly differently. Server screenshots use the fonts on the host plus any `.ttf/.otf` dropped into `<data>/fonts`. MCP auth is bearer-token only, without OAuth, so connectors that require OAuth (e.g. claude.ai custom connectors) aren't supported yet.
+Known limits: text measurement uses Helvetica metrics, so other fonts may wrap slightly differently. Server screenshots use the fonts on the host plus any `.ttf/.otf` dropped into `<data>/fonts`.
