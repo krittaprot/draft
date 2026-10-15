@@ -62,9 +62,12 @@ node dist/server.js serve --port 3299 --data <scratch dir> --public-url http://1
   - Match the surrounding code: compact TypeScript, few comments, and each comment explains *why*.
   - In the editor, update state in `S`, then call `render()`.
 - **Brand colours (editor):**
-  - Teal `#0F6E56` means *you*: selection and handles.
-  - Coral `#D85A30` means *agents*: change outlines and toasts.
-  - Gold `#EF9F27` marks comment pins.
+  - They come from the icon (navy tile, blue-to-amber trail, gold sparks, white cursor).
+  - Blue `#1F5FD6` means *you*: selection, handles and primary buttons.
+  - Amber `#E8801A` means *agents*: change outlines, toasts and agent names.
+  - Gold `#FFC23D` with ink `#3A2600` marks comment pins and the unread badge.
+  - Navy `#0D1838` is the brand surface: sign-in pages and the PWA splash screen.
+  - Icons: `node scripts/icon-from-art.mjs <artwork.png>` cuts the tile out of flat artwork into `mac/icon-source.png`; then `node scripts/make-icons.mjs` builds the web icons.
   - The homepage uses the OKLCH tokens in `tokens.css`. Every colour and font there goes through a token.
 
 ## Gotchas you will hit

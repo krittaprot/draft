@@ -13,7 +13,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const src = fs.readFileSync(path.join(root, 'mac/icon-source.png'));
 const out = path.join(root, 'src/web/icons');
 fs.mkdirSync(out, { recursive: true });
-const PAPER = '#f6f3ec';
+const PAPER = '#0d1838'; // the tile's navy, behind the maskable icon's safe-zone padding
 
 /** Bounding box of the opaque tile, from the PNG's alpha channel (8-bit RGBA, non-interlaced). */
 function tileBox(buf) {

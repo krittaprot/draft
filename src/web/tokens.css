@@ -1,6 +1,6 @@
 /* Hallmark · macrostructure: Workbench · hero: H2 split (title left, lede right) + annotated product capture
- * theme: custom · vibe: "instrument-grade, warm paper, two hands" · paper: oklch(97.6% 0.008 88) · accent: oklch(48% 0.12 170)
- * display: Geist 700 · body: Geist 400 · outlier: Geist Mono (wordmark + code) · axes: light / geometric-sans / chromatic-teal
+ * theme: custom · vibe: "instrument-grade, night-sky navy, two hands" · paper: oklch(97.8% 0.006 255) · accent: oklch(52% 0.19 260)
+ * display: Geist 700 · body: Geist 400 · outlier: Geist Mono (wordmark + code) · axes: light / geometric-sans / chromatic-blue
  * genre: modern-minimal · enrichment: none (real screenshots) · nav: N5 floating pill · footer: Ft2 inline single line
  * studied: no · context: user-provided (audience: open-source devs · use: understand + install / sign in · tone: technical)
  */
@@ -8,21 +8,21 @@
 @font-face { font-family: 'Geist Mono'; src: url('/fonts/GeistMono-Variable.woff2') format('woff2'); font-weight: 100 900; font-display: swap; }
 
 :root {
-  /* paper and ink, tinted toward the anchor teal */
-  --color-paper:    oklch(97.6% 0.008 88);
-  --color-paper-2:  oklch(95.2% 0.010 88);
-  --color-paper-3:  oklch(92.4% 0.012 88);
-  --color-rule:     oklch(86% 0.012 88);
-  --color-rule-2:   oklch(90.5% 0.010 88);
-  --color-muted:    oklch(50% 0.012 175);
-  --color-ink-2:    oklch(37% 0.014 175);
-  --color-ink:      oklch(21% 0.014 175);
-  /* you: teal (the pen) · agent: coral (the cursor), used only where an agent acts */
-  --color-accent:     oklch(48% 0.12 170);
-  --color-accent-hi:  oklch(42% 0.12 170);
-  --color-accent-ink: oklch(98.5% 0.008 88);
-  --color-agent:      oklch(62% 0.168 38);
-  --color-focus:      oklch(52% 0.17 170);
+  /* cool paper and navy ink, from the icon's tile */
+  --color-paper:    oklch(97.8% 0.006 255);
+  --color-paper-2:  oklch(95.6% 0.008 255);
+  --color-paper-3:  oklch(92.8% 0.010 255);
+  --color-rule:     oklch(87% 0.012 255);
+  --color-rule-2:   oklch(91% 0.010 255);
+  --color-muted:    oklch(50% 0.020 262);
+  --color-ink-2:    oklch(37% 0.030 264);
+  --color-ink:      oklch(22% 0.045 266);
+  /* you: blue (the start of the trail) · agent: amber (where the trail meets the cursor), used only where an agent acts */
+  --color-accent:     oklch(52% 0.19 260);
+  --color-accent-hi:  oklch(46% 0.19 262);
+  --color-accent-ink: oklch(98.5% 0.005 255);
+  --color-agent:      oklch(72% 0.17 60);
+  --color-focus:      oklch(58% 0.20 258);
 
   --font-display: 'Geist', ui-sans-serif, -apple-system, 'Helvetica Neue', sans-serif;
   --font-body:    'Geist', ui-sans-serif, -apple-system, 'Helvetica Neue', sans-serif;

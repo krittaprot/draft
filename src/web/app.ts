@@ -13,12 +13,12 @@ const $ = <T extends Element = HTMLElement>(s: string, root: ParentNode = docume
 const $$ = <T extends Element = HTMLElement>(s: string, root: ParentNode = document) => [...root.querySelectorAll(s)] as T[];
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 const SVGNS = 'http://www.w3.org/2000/svg';
-// The icon's story in the UI: teal is you (selection, handles), coral is agents (their changes), gold marks review pins.
-const YOU = '#0F6E56';
-const YOU_WASH = 'rgba(15,110,86,0.08)';
-const AGENT = '#D85A30';
-const PIN = '#EF9F27';
-const PIN_INK = '#412402';
+// The icon's story in the UI: blue is you (selection, handles), amber is agents (their changes), gold marks review pins.
+const YOU = '#1F5FD6';
+const YOU_WASH = 'rgba(31,95,214,0.08)';
+const AGENT = '#E8801A';
+const PIN = '#FFC23D';
+const PIN_INK = '#3A2600';
 
 const S = {
   me: null as Me | null,
@@ -394,7 +394,7 @@ function commentsPanel(): string {
 
 function historyPanel(): string {
   const agents = new Set(['owner', S.me?.name]);
-  return `<div class="panel-head"><span>Click a revision to review it. Coral outlines show what changed.</span></div>` + S.history.map((r) => `<div class="rev ${S.preview?.rev === r.rev ? 'active' : ''}" data-rev="${r.rev}">
+  return `<div class="panel-head"><span>Click a revision to review it. Amber outlines show what changed.</span></div>` + S.history.map((r) => `<div class="rev ${S.preview?.rev === r.rev ? 'active' : ''}" data-rev="${r.rev}">
     <div class="top"><span class="who ${agents.has(r.author) ? '' : 'agent'}">${esc(r.author)}</span><span class="when">#${r.rev} · ${ago(r.time)}</span></div>
     <div class="msg">${esc(r.message)}</div>${r.changed.length ? `<div class="when">${r.changed.length} layer${r.changed.length > 1 ? 's' : ''} changed</div>` : ''}</div>`).join('');
 }
