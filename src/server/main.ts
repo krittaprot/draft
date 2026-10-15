@@ -83,14 +83,14 @@ async function serve() {
   if (allowedEmails.length) auth.allowedEmails = new Set(allowedEmails);
   const owner = auth.ensureOwner();
   const engine = new Engine(store, auth, publicUrl);
-  const neonUrl = flags['neon-auth-url'] ?? process.env.TANDEM_NEON_AUTH_URL;
+  const neonUrl = flags['neon-auth-url'] ?? (process.env.TANDEM_NEON_AUTH_URL || undefined);
   const neon = neonUrl ? new NeonLogin(neonUrl, publicUrl) : undefined;
-  const tokenLogin = (flags['token-login'] ?? process.env.TANDEM_TOKEN_LOGIN ?? (neon ? 'local' : 'on')) as 'on' | 'local' | 'off';
+  const tokenLogin = (flags['token-login'] ?? (process.env.TANDEM_TOKEN_LOGIN || undefined) ?? (neon ? 'local' : 'on')) as 'on' | 'local' | 'off';
   const server = createHttpServer(engine, { trustProxy: true, neon, tokenLogin });
   server.listen(port, host, () => {
     console.log(`Tandem ${VERSION} listening on ${localUrl} (public URL ${publicUrl}), data in ${dataDir}`);
     if (neon) console.log(`Google sign-in via Neon Auth is on; ${auth.members().length} member(s)${allowedEmails.length ? `, limited to ${allowedEmails.join(', ')}` : ''}; browser sign-in with tokens: ${tokenLogin}`);
-    if (owner) console.log(`Created the owner token (shown once, also saved to ${path.join(dataDir, 'owner-token')}):\n  ${owner}`);
+    if (owner) console.log(`Created the owner token; it is in ${path.join(dataDir, 'owner-token')} (readable only by you).`);
   });
   const stop = () => { server.close(); process.exit(0); };
   process.on('SIGTERM', stop);
