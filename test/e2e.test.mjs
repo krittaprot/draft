@@ -406,6 +406,16 @@ test('variables, components, states and bulk edits compose the way the docs say'
   assert.equal(stored.node.fill, 'var:ink');
   assert.equal(stored.computed.fill, '#1d1a15');
 
+  // a token in use cannot be deleted by accident
+  await assert.rejects(
+    () => call(c, 'manage_variables', { document: doc, unset: ['ink'] }),
+    /referenced by \d+ node/,
+    'unsetting a live token is refused',
+  );
+  await call(c, 'manage_variables', { document: doc, unset: ['ink'], force: true });
+  const orphans = textOf(await call(c, 'find_nodes', { document: doc, where: { fill: 'var:ink' } }));
+  assert.match(orphans, /swatch-a/, 'the reference survives as a literal when forced');
+
   // dry runs report problems and never write
   const revBefore = Number(/rev (\d+)/.exec(textOf(await call(c, 'get_document', { document: doc })))[1]);
   const dry = textOf(await call(c, 'create_nodes', { document: doc, dry_run: true, nodes: [{ type: 'text', text: 'x', strokeWidth: null }] }));

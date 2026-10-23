@@ -292,11 +292,12 @@ export function buildMcpServer(engine: Engine, who: Principal): McpServer {
       document: docArg,
       set: z.record(z.string(), z.union([z.string(), z.number()])).optional().describe('tokens to add or replace'),
       unset: z.array(z.string()).optional().describe('token names to remove'),
+      force: z.boolean().optional().describe('remove a token even though nodes still reference it'),
       message: messageArg,
     },
-  }, writer(async (a: { document: string; set?: Record<string, string | number>; unset?: string[]; message?: string }) => {
+  }, writer(async (a: { document: string; set?: Record<string, string | number>; unset?: string[]; force?: boolean; message?: string }) => {
     if (!a.set && !a.unset?.length) throw new Error('give set and/or unset');
-    await engine.apply(a.document, [{ op: 'set_variables', set: a.set, unset: a.unset }], who.name, a.message ?? 'Updated variables');
+    await engine.apply(a.document, [{ op: 'set_variables', set: a.set, unset: a.unset, force: a.force }], who.name, a.message ?? 'Updated variables');
     const vars = store.getDoc(a.document).variables ?? {};
     return text(`variables (${Object.keys(vars).length}):\n${Object.entries(vars).map(([k, v]) => `  ${k} = ${v}`).join('\n') || '  (none)'}`);
   }));

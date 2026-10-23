@@ -10,7 +10,7 @@ export type Op =
   | { op: 'create'; parent?: string; index?: number; node: NodeSpec }
   | { op: 'update'; id: string; props?: Record<string, unknown>; unset?: string[] }
   | { op: 'update_where'; where: Predicate; props?: Record<string, unknown>; unset?: string[]; page?: string }
-  | { op: 'set_variables'; set?: Record<string, string | number>; unset?: string[] }
+  | { op: 'set_variables'; set?: Record<string, string | number>; unset?: string[]; force?: boolean }
   | { op: 'delete'; id: string }
   | { op: 'move'; id: string; parent: string; index?: number }
   | { op: 'duplicate'; id: string; dx?: number; dy?: number }
@@ -193,7 +193,15 @@ export function applyOps(source: TandemDoc, ops: Op[], opts: { atomic?: boolean 
         }
         case 'set_variables': {
           const next = { ...(doc.variables ?? {}) };
-          for (const key of op.unset ?? []) delete next[key];
+          for (const key of op.unset ?? []) {
+            if (!op.force) {
+              const ref = `var:${key}`;
+              let used = 0;
+              walk(doc, ({ node }) => { if (JSON.stringify(node).includes(ref)) used++; });
+              if (used) throw new OpError(`variable ${key} is referenced by ${used} node${used === 1 ? '' : 's'}; pass force to remove it anyway`);
+            }
+            delete next[key];
+          }
           if (op.set !== undefined) Object.assign(next, variablesSchema.parse(op.set));
           doc.variables = next;
           break;
