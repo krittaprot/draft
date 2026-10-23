@@ -300,14 +300,20 @@ export function buildMcpServer(engine: Engine, who: Principal): McpServer {
   }));
 
   server.registerTool('audit_contrast', {
-    title: 'Audit contrast', description: 'Checks every text node against the colour actually behind it (alpha layers and every gradient stop, reported at the worst) and returns the WCAG ratio, with the closest passing token from the document where there is one.',
+    title: 'Audit contrast', description: 'Checks every text node against the colour actually behind it (alpha layers and every gradient stop, reported at the worst) and returns the WCAG ratio, with the closest passing token from the document where there is one. Failures are grouped by page, with the clean pages named, so an archive does not read as a defect in the live design; pass page to check one page. Text inside a node marked disabled:true is reported as exempt rather than failing.',
     inputSchema: { document: docArg, page: z.string().optional() },
     annotations: { readOnlyHint: true },
   }, reader((a: { document: string; page?: string }) => {
-    const { failures, unverified } = engine.auditContrast(store.getDoc(a.document), a.page);
-    const note = unverified ? `\n${unverified} text node${unverified === 1 ? ' sits' : 's sit'} on an image and could not be checked.` : '';
-    if (!failures.length) return text(`All text passes WCAG AA against its backdrop.${note}`);
-    return text(`${failures.length} contrast failure${failures.length === 1 ? '' : 's'}:\n${failures.join('\n')}${note}`);
+    const { pages, unverified, exempt } = engine.auditContrast(store.getDoc(a.document), a.page);
+    const note = (unverified ? `\n${unverified} text node${unverified === 1 ? ' sits' : 's sit'} on an image and could not be checked.` : '')
+      + (exempt ? `\n${exempt} text node${exempt === 1 ? ' is' : 's are'} inside a disabled control and exempt from 1.4.3.` : '');
+    const total = pages.reduce((n, p) => n + p.failures.length, 0);
+    if (!total) return text(`All text passes WCAG AA against its backdrop across ${pages.length} page${pages.length === 1 ? '' : 's'}.${note}`);
+    const hit = pages.filter((p) => p.failures.length);
+    const clean = pages.filter((p) => !p.failures.length).map((p) => p.name);
+    const body = hit.map((p) => `page "${p.name}" id=${p.id} — ${p.failures.length}\n  ${p.failures.join('\n  ')}`).join('\n');
+    return text(`${total} contrast failure${total === 1 ? '' : 's'} on ${hit.length} of ${pages.length} page${pages.length === 1 ? '' : 's'}:\n\n${body}`
+      + (clean.length ? `\n\nClean: ${clean.join(', ')}` : '') + note);
   }));
 
   server.registerTool('upload_image', {

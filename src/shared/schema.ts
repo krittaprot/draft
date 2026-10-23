@@ -74,6 +74,8 @@ export const propsSchema = z.object({
   role: z.string().max(64),
   label: z.string().max(500),
   alt: z.string().max(500),
+  /** An inactive control: its text is exempt from WCAG 1.4.3 contrast, and exports carry aria-disabled. */
+  disabled: z.boolean(),
   // free-form note for humans and agents (design rationale, todo)
   note: z.string().max(5000),
 }).partial().strict();

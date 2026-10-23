@@ -11,7 +11,7 @@ import { layoutPage, padding as padOf, type Boxes } from '../shared/layout.ts';
 import { measureText, textStyle } from '../shared/text.ts';
 import { cssFamily, isKnownFamily, italicWeights, normalizeFamily } from '../shared/fonts.ts';
 import { resolvePage } from '../shared/resolve.ts';
-import { flattenOver, parseColor, contrastRatio, luminance } from '../shared/color.ts';
+import { composite, flattenOver, parseColor, contrastRatio, luminance } from '../shared/color.ts';
 import { compilePredicate, type Predicate } from '../shared/predicate.ts';
 import { variablesSchema } from '../shared/schema.ts';
 import { applyOps, OpError, type Op } from './ops.ts';
@@ -244,13 +244,17 @@ export class Engine {
   /**
    * WCAG contrast for every text node against the colour actually behind it. Gradients are evaluated
    * against every stop and reported at their worst; text over an image cannot be judged from geometry,
-   * so it is counted as unverified instead of guessed.
+   * so it is counted as unverified instead of guessed. Results keep their page, so a hit in an archive
+   * is not read as a defect in the live design.
    */
-  auditContrast(doc: TandemDoc, pageId?: string): { failures: string[]; unverified: number } {
-    const failures: string[] = [];
+  auditContrast(doc: TandemDoc, pageId?: string): { pages: { id: string; name: string; failures: string[] }[]; unverified: number; exempt: number } {
+    const pages: { id: string; name: string; failures: string[] }[] = [];
+    const idx = indexDoc(doc);
     let unverified = 0;
+    let exempt = 0;
     for (const page of doc.pages) {
       if (pageId && page.id !== pageId) continue;
+      const failures: string[] = [];
       walk({ ...doc, pages: [page] }, ({ node }) => {
         if (node.type !== 'text' || node.visible === false) return;
         const cfg = varLookup(doc, node.color);
@@ -258,26 +262,37 @@ export class Engine {
         const fgRaw = (typeof cfg === 'string' ? cfg : null) ?? (typeof ffg === 'string' ? ffg : '#111111');
         const fg = parseColor(fgRaw);
         if (!fg) return;
+        // WCAG 1.4.3 exempts text in an inactive control, and opacity reduces the contrast actually seen
+        let alpha = node.opacity ?? 1;
+        let disabled = node.disabled === true;
+        for (let p = idx.get(node.id)?.parent; p; p = idx.get(p.id)?.parent) {
+          alpha *= p.opacity ?? 1;
+          if (p.disabled === true) disabled = true;
+        }
+        if (disabled) { exempt++; return; }
+        if (alpha <= 0.01) return;
         const backdrop = backdropOf(doc, page, node.id);
         if (backdrop.image) { unverified++; return; }
-        let worst: { ratio: number; bg: string; rgba: NonNullable<ReturnType<typeof parseColor>> } | null = null;
+        let worst: { ratio: number; bg: string; rgba: NonNullable<ReturnType<typeof parseColor>>; painted: NonNullable<ReturnType<typeof parseColor>> } | null = null;
         for (const c of backdrop.colors) {
           const b = parseColor(c);
           if (!b) continue;
-          const r = contrastRatio(fg, b);
-          if (!worst || r < worst.ratio) worst = { ratio: r, bg: c, rgba: b };
+          const painted = composite({ ...fg, a: fg.a * alpha }, b);
+          const r = contrastRatio(painted, b);
+          if (!worst || r < worst.ratio) worst = { ratio: r, bg: c, rgba: b, painted };
         }
         if (!worst) return;
         const size = node.fontSize ?? 16;
         const large = size >= 24 || (size >= 18.66 && (node.fontWeight ?? 400) >= 700);
         const need = large ? 3 : 4.5;
         if (worst.ratio + 0.005 >= need) return;
-        const hint = suggestToken(doc, fg, worst.rgba, need);
+        const hint = suggestToken(doc, worst.painted, worst.rgba, need);
         const where = `${worst.bg}${backdrop.gradient ? ' (gradient stop)' : ''}`;
         failures.push(`${node.id} "${(node.text ?? '').slice(0, 44).replace(/\n/g, '⏎')}" ${fgRaw} on ${where} → ${worst.ratio.toFixed(2)}:1, needs ${need}:1${hint}`);
       });
+      pages.push({ id: page.id, name: page.name, failures });
     }
-    return { failures, unverified };
+    return { pages, unverified, exempt };
   }
 
   /** The document's tokens as CSS custom properties, DTCG-shaped JSON and a Tailwind @theme block. */
@@ -477,7 +492,7 @@ function htmlNode(n: TandemNode, boxes: Boxes, parent: TandemNode | null, asset:
   if (n.rotation) css.push(`transform:rotate(${n.rotation}deg)`);
   if (n.shadows?.length) css.push(`box-shadow:${n.shadows.map((s) => `${s.inset ? 'inset ' : ''}${s.x ?? 0}px ${s.y ?? 4}px ${s.blur ?? 12}px ${s.color ?? 'rgba(0,0,0,0.15)'}`).join(',')}`);
   if (n.blur) css.push(`filter:blur(${n.blur}px)`);
-  const a11y = `${n.role ? ` role="${escHtml(n.role)}"` : ''}${n.label ? ` aria-label="${escHtml(n.label)}"` : ''}`;
+  const a11y = `${n.role ? ` role="${escHtml(n.role)}"` : ''}${n.label ? ` aria-label="${escHtml(n.label)}"` : ''}${n.disabled ? ' aria-disabled="true"' : ''}`;
   const tag = (inner: string, el = 'div') => `<${el} data-tandem-id="${escHtml(n.id)}"${a11y} style="${escHtml(css.join(';'))}">${inner}</${el}>`;
 
   switch (n.type) {

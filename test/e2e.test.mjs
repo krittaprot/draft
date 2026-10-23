@@ -416,6 +416,22 @@ test('variables, components, states and bulk edits compose the way the docs say'
   const audit2 = textOf(await call(c, 'audit_contrast', { document: doc }));
   assert.doesNotMatch(audit2, /hello/, 'white on a navy gradient passes');
   assert.match(audit2, /ghost .*1\.00:1/, 'white on white is still a failure');
+  assert.match(audit2, /on 1 of 1 page/, 'failures are grouped by page');
+  assert.match(audit2, /page "Page 1" id=p_/, 'each group names its page');
+
+  // translucent text is judged as painted, not as its nominal colour
+  await call(c, 'create_nodes', { document: doc, nodes: [{ type: 'text', id: 'faded', text: 'Faded label', fontSize: 13, color: 'rgba(0,0,0,0.35)' }] });
+  const audit3 = textOf(await call(c, 'audit_contrast', { document: doc }));
+  assert.match(audit3, /faded .*needs 4\.5:1/, 'a 35% black label on white is a failure');
+
+  // a disabled control is exempt from 1.4.3, and says so in the audit and the export
+  await call(c, 'create_nodes', { document: doc, nodes: [{ type: 'frame', id: 'inactive-tab', disabled: true, role: 'tab', label: 'Items', width: 'hug', layout: 'row', gap: 4,
+    children: [{ type: 'text', text: 'Items', fontSize: 12, color: '#dad4c7' }] }] });
+  const audit4 = textOf(await call(c, 'audit_contrast', { document: doc }));
+  assert.doesNotMatch(audit4, /"Items"/, 'disabled text is not reported as a failure');
+  assert.match(audit4, /exempt from 1\.4\.3/);
+  const html = textOf(await call(c, 'export', { document: doc, node: 'inactive-tab', format: 'html' }));
+  assert.match(html, /aria-disabled="true"/);
 
   // truncation ends the visible text with an ellipsis
   await call(c, 'create_nodes', { document: doc, nodes: [{ type: 'text', id: 'tip', text: 'A tooltip that is far too long for the space it was given', width: 90, wrap: 'truncate', fontSize: 13 }] });
