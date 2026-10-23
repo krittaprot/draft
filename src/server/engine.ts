@@ -1,5 +1,7 @@
 // Shared server logic behind both the MCP tools and the editor's HTTP API.
 import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import dns from 'node:dns/promises';
 import net from 'node:net';
 import { Resvg } from '@resvg/resvg-js';
@@ -7,6 +9,7 @@ import { DEFAULT_FONT, indexDoc, type Box, type TandemDoc, type TandemNode, type
 import { renderPage } from '../shared/render.ts';
 import { layoutPage, padding as padOf, type Boxes } from '../shared/layout.ts';
 import { textStyle } from '../shared/text.ts';
+import { cssFamily, isKnownFamily, italicWeights, normalizeFamily } from '../shared/fonts.ts';
 import { applyOps, OpError, type Op } from './ops.ts';
 import { isAssetId, type Store } from './store.ts';
 import type { Auth } from './auth.ts';
@@ -27,10 +30,26 @@ const SYSTEM_FONTS = [
   '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
 ];
 
+/** The bundled families (dist/web/fonts/<slug>/*.ttf) — the same files the browser loads via /fonts.css. */
+function bundledFonts(): string[] {
+  const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'web', 'fonts');
+  if (!fs.existsSync(dir)) return [];
+  const out: string[] = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    for (const f of fs.readdirSync(path.join(dir, entry.name))) {
+      if (/\.(ttf|otf)$/i.test(f)) out.push(path.join(dir, entry.name, f));
+    }
+  }
+  return out;
+}
+
 export class Engine {
   private fonts: string[];
+  private defaultFamily: string;
   constructor(public store: Store, public auth: Auth, public publicUrl: string) {
-    this.fonts = [...SYSTEM_FONTS.filter((f) => fs.existsSync(f)), ...store.fontFiles()];
+    this.fonts = [...SYSTEM_FONTS.filter((f) => fs.existsSync(f)), ...bundledFonts(), ...store.fontFiles()];
+    this.defaultFamily = fs.existsSync('/System/Library/Fonts/HelveticaNeue.ttc') ? 'Helvetica Neue' : 'Inter';
   }
 
   getDoc(id: string, rev?: number): TandemDoc {
@@ -50,11 +69,36 @@ export class Engine {
   }
 
   async apply(docId: string, ops: Op[], author: string, message: string) {
-    const prepared = await this.resolveRemoteImages(ops);
+    const prepared = this.normalizeFonts(await this.resolveRemoteImages(ops));
     const cur = this.store.getDoc(docId);
     const r = applyOps(cur, prepared);
     const rev = this.store.commit(r.doc, { author, message, changed: r.changed });
-    return { rev: rev.rev, created: r.created, changed: r.changed };
+    return {
+      rev: rev.rev, created: r.created, changed: r.changed,
+      fontIssues: fontIssues(r.doc, this.fontTouchedIds(prepared, r.created)),
+    };
+  }
+
+  /** Ids whose typography actually changed: new nodes, plus updates that set fontFamily or italic. */
+  private fontTouchedIds(ops: Op[], created: string[]): Set<string> {
+    const ids = new Set(created);
+    for (const op of ops) {
+      if (op?.op === 'update' && op.props && ('fontFamily' in op.props || 'italic' in op.props)) ids.add(op.id);
+    }
+    return ids;
+  }
+
+  /** Rewrites fontFamily to the catalogue's spelling so "inter" and "Inter Display" both render as Inter. */
+  private normalizeFonts(ops: Op[]): Op[] {
+    const fix = (props: Record<string, unknown>) => {
+      if (typeof props.fontFamily !== 'string') return props;
+      return { ...props, fontFamily: normalizeFamily(props.fontFamily) };
+    };
+    return ops.map((op) => {
+      if (op?.op === 'create') return { ...op, node: fixTree(op.node, true) };
+      if (op?.op === 'update' && op.props) return { ...op, props: fix(op.props) };
+      return op;
+    });
   }
 
   // ---------- images ----------
@@ -138,7 +182,7 @@ export class Engine {
     scale = Math.max(0.05, Math.min(scale, 4, Math.sqrt(40e6 / (r.box.w * r.box.h))));
     const png = new Resvg(r.svg, {
       fitTo: { mode: 'zoom', value: scale },
-      font: { loadSystemFonts: false, fontFiles: this.fonts, defaultFontFamily: 'Helvetica Neue', sansSerifFamily: 'Helvetica Neue' },
+      font: { loadSystemFonts: false, fontFiles: this.fonts, defaultFontFamily: this.defaultFamily, sansSerifFamily: this.defaultFamily },
       imageRendering: 0,
     }).render().asPng();
     return { png: Buffer.from(png), width: Math.round(r.box.w * scale), height: Math.round(r.box.h * scale), box: r.box, scale };
@@ -196,6 +240,36 @@ export class Engine {
 
 function countNodes(list: TandemNode[]): number {
   return list.reduce((a, n) => a + 1 + countNodes(n.children ?? []), 0);
+}
+
+function fixTree(spec: unknown, isNew = false): Record<string, unknown> {
+  if (!spec || typeof spec !== 'object' || Array.isArray(spec)) return spec as Record<string, unknown>;
+  const o = { ...(spec as Record<string, unknown>) };
+  // New text nodes get the bundled default instead of a macOS-only stack, so the PNG and the canvas
+  // agree on every machine. Existing documents keep whatever fontFamily they were saved with.
+  if (isNew && o.type === 'text' && o.fontFamily === undefined) o.fontFamily = 'Inter';
+  if (typeof o.fontFamily === 'string') o.fontFamily = normalizeFamily(o.fontFamily);
+  if (Array.isArray(o.children)) o.children = o.children.map((c) => fixTree(c, isNew));
+  return o;
+}
+
+/** Font problems the author should hear about: missing families, and italics the family cannot draw. */
+function fontIssues(doc: TandemDoc, changed: Set<string>): string[] {
+  const missing = new Set<string>();
+  const noItalic = new Set<string>();
+  const visit = (nodes: TandemNode[]) => {
+    for (const n of nodes) {
+      if (n.type === 'text' && changed.has(n.id) && n.fontFamily) {
+        if (!isKnownFamily(n.fontFamily)) missing.add(n.fontFamily);
+        else if (n.italic && italicWeights(n.fontFamily).length === 0) noItalic.add(n.fontFamily);
+      }
+      if (n.children) visit(n.children);
+    }
+  };
+  for (const page of doc.pages) visit(page.children);
+  const out = [...missing].map((f) => `unknown font: ${f} — it falls back to Helvetica and will look different elsewhere`);
+  for (const f of noItalic) out.push(`no italic face for ${f} — it renders upright instead of a synthesised slant`);
+  return out;
 }
 
 const roundBox = (b: Box): Box => ({ x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.w), h: Math.round(b.h) });
@@ -292,7 +366,7 @@ function htmlNode(n: TandemNode, boxes: Boxes, parent: TandemNode | null, asset:
     }
     case 'text': {
       const st = textStyle(n);
-      css.push(`font-family:${n.fontFamily ?? DEFAULT_FONT}`, `font-size:${st.fontSize}px`, `font-weight:${st.fontWeight}`, `line-height:${n.lineHeight ?? 1.3}`, `color:${n.color ?? '#111111'}`, 'white-space:pre-wrap');
+      css.push(`font-family:${cssFamily(n.fontFamily ?? DEFAULT_FONT)}`, `font-size:${st.fontSize}px`, `font-weight:${st.fontWeight}`, `line-height:${n.lineHeight ?? 1.3}`, `color:${n.color ?? '#111111'}`, 'white-space:pre-wrap', 'font-synthesis:none');
       if (n.italic) css.push('font-style:italic');
       if (st.letterSpacing) css.push(`letter-spacing:${st.letterSpacing}px`);
       if (n.textAlign) css.push(`text-align:${n.textAlign}`);

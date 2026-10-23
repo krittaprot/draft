@@ -38,7 +38,9 @@
     "build": "node scripts/build.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node scripts/build.mjs && node --test test/*.test.mjs",
-    "start": "node dist/server.js serve"
+    "start": "node dist/server.js serve",
+    "fonts": "node scripts/fonts.mjs",
+    "fonts:check": "node scripts/fonts.mjs --check"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",

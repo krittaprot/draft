@@ -158,7 +158,19 @@ Use a scratch data directory for testing. `src/shared` contains the model and re
 
 See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and [AGENTS.md](AGENTS.md) for contribution and development guidance.
 
-Text measurement currently uses Helvetica metrics; server rendering uses installed fonts and any fonts added to `<data>/fonts`.
+Text measurement uses the real metrics of the face that will be rendered for the 39 bundled families (advance widths, ascender/descender), so the editor, the SVG and the server PNG wrap identically. Families outside the catalogue fall back to Helvetica metrics. Server rendering also uses installed system fonts and any fonts added to `<data>/fonts`.
+
+### Fonts
+
+`src/shared/font-catalog.json` lists the families and weights Draft ships (Inter, Geist, Roboto, Open Sans, Lato, Montserrat, Poppins, Work Sans, DM Sans, Manrope, Space Grotesk, Plus Jakarta Sans, Figtree, Public Sans, Outfit, Archivo, Barlow, Rubik, IBM Plex Sans/Mono, Source Sans 3, Source Serif 4, Noto Sans, Oswald, Bebas Neue, Anton, Playfair Display, Merriweather, Lora, Libre Baskerville, EB Garamond, DM Serif Display, Instrument Serif, Fraunces, JetBrains Mono, Fira Code, Roboto Mono, Space Mono, Geist Mono) — 248 faces including the italics Google actually ships.
+
+`pnpm fonts` downloads the families and regenerates `src/shared/font-data.ts` plus `src/shared/fonts.lock.json` (a sha256 of every font file); it is the only thing that writes the metrics. A build verifies that every declared face is on disk **and** that no binary changed since the metrics were written, and fails otherwise — so a release can never ship a stylesheet, a metric table and a set of font files that disagree. `DRAFT_FONTS_OFFLINE=1` downgrades that to a warning for machines without network, and `pnpm fonts:check` reports missing faces on its own.
+
+`build.mjs` writes `/fonts.css` with one `@font-face` per available face, each URL carrying its content hash, so a stylesheet and the binaries it names are always the same pair (the stylesheet is versioned like every other asset).
+
+Typography rules the editor and the renderer share: canvas text sets `font-synthesis: none`, so a weight or italic the family does not actually ship is not faked — it falls back to the nearest real face, exactly as resvg renders it. New text nodes default to Inter; existing documents keep the family they were saved with. Agents can call `list_fonts`, and `create_nodes`/`update_nodes` warn when they use an unknown family or an italic the family cannot draw.
+
+The font files are large, so `src/web/fonts/<slug>/` is git-ignored while the generated metrics are committed.
 
 ## Licence
 

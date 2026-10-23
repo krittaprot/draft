@@ -3,6 +3,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import { MODEL_GUIDE, newId } from '../shared/model.ts';
+import { fontInventory } from '../shared/fonts.ts';
 import type { Engine } from './engine.ts';
 import type { Principal } from './auth.ts';
 import type { Op } from './ops.ts';
@@ -19,11 +20,16 @@ Workflow:
 4. To show the person your work, include the screenshot's "share link" in your reply (a PNG anyone with the link can open) and the editor link.
 5. Before revising an existing design, call list_comments: people pin feedback to nodes. Reply with reply_comment and resolve_comment once addressed.
 6. Every change becomes a revision with your name; write a short message describing it. get_history and restore_revision undo mistakes.
+7. Typography: call list_fonts once and pick a family from it — those files ship with Draft, are measured with real metrics and render identically in the PNG and the browser. Unknown families silently fall back to Helvetica.
 
 ${MODEL_GUIDE}`;
 
 const text = (s: string): CallToolResult => ({ content: [{ type: 'text', text: s }] });
 const fail = (e: unknown): CallToolResult => ({ isError: true, content: [{ type: 'text', text: e instanceof Error ? e.message : String(e) }] });
+/** Font problems do not fail the edit, but the agent must know the design is not rendering as asked. */
+const fontWarning = (issues: string[]): string => issues.length
+  ? `\n\n⚠ ${issues.join('\n⚠ ')}\nCall list_fonts for families that ship with Draft.`
+  : '';
 
 const docArg = z.string().describe('document id (d_…), from list_documents or create_document');
 const messageArg = z.string().max(300).optional().describe('short description of this change, shown in the revision history');
@@ -70,6 +76,11 @@ export function buildMcpServer(engine: Engine, who: Principal): McpServer {
     title: 'Design guide', description: 'Explains the Draft node model and the recommended workflow. Read once before designing.',
     inputSchema: {}, annotations: { readOnlyHint: true },
   }, guard(() => text(INSTRUCTIONS)));
+
+  server.registerTool('list_fonts', {
+    title: 'List fonts', description: 'Lists the font families Draft ships (with available weights and italics) plus the system fonts that also work. Use a name from here for fontFamily; unknown names fall back to Helvetica and render differently on other machines.',
+    inputSchema: {}, annotations: { readOnlyHint: true },
+  }, guard(() => text(fontInventory())));
 
   server.registerTool('list_documents', {
     title: 'List documents', description: 'Lists documents with their pages and top-level frames.',
@@ -126,7 +137,7 @@ export function buildMcpServer(engine: Engine, who: Principal): McpServer {
   }, writer(async (a: { document: string; parent?: string; index?: number; nodes: Record<string, unknown>[]; message?: string; preview?: boolean }) => {
     const ops: Op[] = a.nodes.map((node, i) => ({ op: 'create', parent: a.parent, index: a.index === undefined ? undefined : a.index + i, node }));
     const r = await engine.apply(a.document, ops, who.name, a.message ?? `Added ${a.nodes.length} node${a.nodes.length > 1 ? 's' : ''}`);
-    const res = text(`rev ${r.rev}: created ${r.created.length} nodes: ${r.created.join(', ')}\n\n` + engine.outline(store.getDoc(a.document), { nodeId: r.created[0], depth: 3 }));
+    const res = text(`rev ${r.rev}: created ${r.created.length} nodes: ${r.created.join(', ')}\n\n` + engine.outline(store.getDoc(a.document), { nodeId: r.created[0], depth: 3 }) + fontWarning(r.fontIssues));
     return a.preview ? withPreview(res, a.document, r.created) : res;
   }));
 
@@ -144,7 +155,7 @@ export function buildMcpServer(engine: Engine, who: Principal): McpServer {
   }, writer(async (a: { document: string; updates: { id: string; props?: Record<string, unknown>; unset?: string[] }[]; message?: string; preview?: boolean }) => {
     const ops: Op[] = a.updates.map((u) => ({ op: 'update', id: u.id, props: u.props, unset: u.unset }));
     const r = await engine.apply(a.document, ops, who.name, a.message ?? `Updated ${a.updates.length} node${a.updates.length > 1 ? 's' : ''}`);
-    const res = text(`rev ${r.rev}: updated ${a.updates.map((u) => u.id).join(', ')}`);
+    const res = text(`rev ${r.rev}: updated ${a.updates.map((u) => u.id).join(', ')}` + fontWarning(r.fontIssues));
     return a.preview ? withPreview(res, a.document, a.updates.map((u) => u.id)) : res;
   }));
 

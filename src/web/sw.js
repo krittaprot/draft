@@ -1,7 +1,7 @@
 // Tandem service worker: makes the app installable and keeps its shell (styles, fonts, icons) available offline.
 // Documents, the API, MCP, sign-in and share links always go to the network; nothing private is cached.
 const CACHE = 'tandem-shell-v1';
-const SHELL = ['/offline.html', '/style.css', '/landing.css', '/tokens.css', '/app.js', '/pwa.js', '/manifest.webmanifest',
+const SHELL = ['/offline.html', '/style.css', '/landing.css', '/tokens.css', '/fonts.css', '/app.js', '/pwa.js', '/manifest.webmanifest',
   '/fonts/Geist-Variable.woff2', '/fonts/GeistMono-Variable.woff2', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {

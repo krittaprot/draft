@@ -1,8 +1,10 @@
 // Text measurement shared by the server (PNG screenshots) and the browser editor, so both wrap text
-// identically. Uses Helvetica advance widths (Arial is metric-compatible); other fonts are approximated.
+// identically. For the bundled families this reads the real advance widths of the face that will be
+// drawn (see shared/fonts.ts); unknown families fall back to Helvetica metrics.
 import type { TandemNode } from './model.ts';
+import { advance, averageWidth, faceFor } from './fonts.ts';
 
-// Helvetica advance widths per 1000 em for ASCII 32..126.
+// Helvetica advance widths per 1000 em for ASCII 32..126 — the approximation for fonts we do not ship.
 const ASCII = [
   278, 278, 355, 556, 556, 889, 667, 191, 333, 333, 389, 584, 278, 333, 278, 278, // space .. /
   556, 556, 556, 556, 556, 556, 556, 556, 556, 556, // 0-9
@@ -25,19 +27,55 @@ function charWidth(c: number): number {
   return 0.6;
 }
 
-export interface TextStyle { fontSize: number; fontWeight: number; letterSpacing: number; lineHeight: number }
+export interface TextStyle { family: string; fontSize: number; fontWeight: number; italic: boolean; letterSpacing: number; lineHeight: number }
 
 export function textStyle(n: TandemNode): TextStyle {
   const fontSize = n.fontSize ?? 16;
-  return { fontSize, fontWeight: n.fontWeight ?? 400, letterSpacing: n.letterSpacing ?? 0, lineHeight: (n.lineHeight ?? 1.3) * fontSize };
+  return {
+    family: n.fontFamily ?? '',
+    fontSize,
+    fontWeight: n.fontWeight ?? 400,
+    italic: n.italic === true,
+    letterSpacing: n.letterSpacing ?? 0,
+    lineHeight: (n.lineHeight ?? 1.3) * fontSize,
+  };
+}
+
+/** Vertical distance from the top of a line box to the text baseline (CSS half-leading). */
+export function baselineOffset(st: TextStyle): number {
+  const face = faceFor(st.family, st.fontWeight, st.italic);
+  if (!face) return st.lineHeight / 2 + st.fontSize * 0.35;
+  const asc = (face.asc / face.upem) * st.fontSize;
+  const desc = (Math.abs(face.desc) / face.upem) * st.fontSize;
+  return (st.lineHeight - (asc + desc)) / 2 + asc;
 }
 
 export function measureLine(s: string, st: TextStyle): number {
-  let em = 0;
-  let count = 0;
-  for (const ch of s) { em += charWidth(ch.codePointAt(0)!); count++; }
-  const weightFactor = 1 + Math.max(-0.04, Math.min(0.1, (st.fontWeight - 400) / 400 * 0.07));
-  return em * st.fontSize * weightFactor + st.letterSpacing * count;
+  const face = faceFor(st.family, st.fontWeight, st.italic);
+  if (!face) {
+    // unknown family: Helvetica widths with a small weight adjustment, as before
+    let em = 0, count = 0;
+    for (const ch of s) { em += charWidth(ch.codePointAt(0)!); count++; }
+    const weightFactor = 1 + Math.max(-0.04, Math.min(0.1, (st.fontWeight - 400) / 400 * 0.07));
+    return em * st.fontSize * weightFactor + st.letterSpacing * count;
+  }
+  const avg = averageWidth(face);
+  let em = 0, count = 0;
+  for (const ch of s) {
+    const cp = ch.codePointAt(0)!;
+    let w = advance(face, cp);
+    if (w === null) {
+      if (cp === 9) w = 1.1;
+      else if (cp === 0x0e31 || (cp >= 0x0e34 && cp <= 0x0e3a) || (cp >= 0x0e47 && cp <= 0x0e4e)) w = 0;
+      else if (cp >= 0x0300 && cp <= 0x036f) w = 0;
+      else if ((cp >= 0x1100 && cp <= 0x11ff) || (cp >= 0x2e80 && cp <= 0xa4cf) || (cp >= 0xac00 && cp <= 0xd7a3) || (cp >= 0xf900 && cp <= 0xfaff) || (cp >= 0xff00 && cp <= 0xff60)) w = 1;
+      else if (cp >= 0x1f300) w = 1.2;
+      else if (cp >= 0x0e00 && cp <= 0x0e7f) w = 0.58;
+      else w = avg;
+    }
+    em += w; count++;
+  }
+  return em * st.fontSize + st.letterSpacing * count;
 }
 
 /** Splits text into lines, wrapping at maxWidth when given. */

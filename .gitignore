@@ -1,6 +1,7 @@
 node_modules/
 dist/
 build/
+src/web/fonts/*/
 *.tmp
 .DS_Store
 deploy/deploy.env

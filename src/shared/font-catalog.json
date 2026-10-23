@@ -1,0 +1,668 @@
+{
+  "version": 1,
+  "note": "Popular families Draft ships. scripts/fonts.mjs downloads the declared weights from Google Fonts into src/web/fonts/<slug>/ and writes font-metrics.json, which is what the editor and the server actually measure and render with.",
+  "families": [
+    {
+      "name": "Inter",
+      "slug": "inter",
+      "category": "sans",
+      "weights": [
+        300,
+        400,
+        500,
+        600,
+        700,
+        800
+      ],
+      "italicWeights": [
+        400,
+        700
+      ],
+      "aliases": [
+        "Inter Variable",
+        "Inter Display",
+        "Inter UI"
+      ]
+    },
+    {
+      "name": "Geist",
+      "slug": "geist",
+      "category": "sans",
+      "weights": [
+        300,
+        400,
+        500,
+        600,
+        700,
+        800
+      ],
+      "italicWeights": [
+        400,
+        700
+      ],
+      "aliases": [
+        "Geist Sans"
+      ]
+    },
+    {
+      "name": "Roboto",
+      "slug": "roboto",
+      "category": "sans",
+      "weights": [
+        300,
+        400,
+        500,
+        600,
+        700,
+        800
+      ],
+      "italicWeights": [
+        400,
+        700
+      ],
+      "aliases": []
+    },
+    {
+      "name": "Open Sans",
+      "slug": "open-sans",
+      "category": "sans",
+      "weights": [
+        300,
+        400,
+        500,
+        600,
+        700,
+        800
+      ],
+      "italicWeights": [
+        400,
+        700
+      ],
+      "aliases": [
+        "OpenSans"
+      ]
+    },
+    {
+      "name": "Lato",
+      "slug": "lato",
+      "category": "sans",
+      "weights": [
+        300,
+        400,
+        700,
+        900
+      ],
+      "italicWeights": [
+        400,
+        700
+      ],
+      "aliases": []
+    },
+    {
+      "name": "Montserrat",
+      "slug": "montserrat",
+      "category": "sans",
+      "weights": [
+        300,
+        400,
+        500,
+        600,
+        700,
+        800
+      ],
+      "italicWeights": [
+        400,
+        700
+      ],
+      "aliases": []
+    },
+    {
+      "name": "Poppins",
+      "slug": "poppins",
+      "category": "sans",
+      "weights": [
+        300,
+        400,
+        500,
+        600,
+        700,
+        800
+      ],
+      "italicWeights": [
+        400,
+        700
+      ],
+      "aliases": []
+    },
+    {
+      "name": "Work Sans",
+      "slug": "work-sans",
+      "category": "sans",
+      "weights": [
+        300,
+        400,
+        500,
+        600,
+        700
+      ],
+      "italicWeights": [
+        400,
+        700
+      ],
+      "aliases": []
+    },
+    {
+      "name": "DM Sans",
+      "slug": "dm-sans",
+      "category": "sans",
+      "weights": [
+        300,
+        400,
+        500,
+        600,
+        700
+      ],
+      "italicWeights": [
+        400,
+        700
+      ],
+      "aliases": [
+        "DM Sans 9pt",
+        "DM Sans 36pt"
+      ]
+    },
+    {
+      "name": "Manrope",
+      "slug": "manrope",
+      "category": "sans",
+      "weights": [
+        300,
+        400,
+        500,
+        600,
+        700,
+        800
+      ],
+      "italicWeights": [],
+      "aliases": []
+    },
+    {
+      "name": "Space Grotesk",
+      "slug": "space-grotesk",
+      "category": "sans",
+      "weights": [
+        300,
+        400,
+        500,
+        600,
+        700
+      ],
+      "italicWeights": [],
+      "aliases": []
+    },
+    {
+      "name": "Plus Jakarta Sans",
+      "slug": "plus-jakarta-sans",
+      "category": "sans",
+      "weights": [
+        300,
+        400,
+        500,
+        600,
+        700,
+        800
+      ],
+      "italicWeights": [
+        400,
+        700
+      ],
+      "aliases": [
+        "PlusJakartaSans"
+      ]
+    },
+    {
+      "name": "Figtree",
+      "slug": "figtree",
+      "category": "sans",
+      "weights": [
+        300,
+        400,
+        500,
+        600,
+        700,
+        800
+      ],
+      "italicWeights": [
+        400,
+        700
+      ],
+      "aliases": []
+    },
+    {
+      "name": "Public Sans",
+      "slug": "public-sans",
+      "category": "sans",
+      "weights": [
+        300,
+        400,
+        500,
+        600,
+        700,
+        800
+      ],
+      "italicWeights": [
+        400,
+        700
+      ],
+      "aliases": []
+    },
+    {
+      "name": "Outfit",
+      "slug": "outfit",
+      "category": "sans",
+      "weights": [
+        300,
+        400,
+        500,
+        600,
+        700,
+        800
+      ],
+      "italicWeights": [],
+      "aliases": []
+    },
+    {
+      "name": "Archivo",
+      "slug": "archivo",
+      "category": "sans",
+      "weights": [
+        400,
+        500,
+        600,
+        700,
+        800
+      ],
+      "italicWeights": [
+        400,
+        700
+      ],
+      "aliases": []
+    },
+    {
+      "name": "Barlow",
+      "slug": "barlow",
+      "category": "sans",
+      "weights": [
+        300,
+        400,
+        500,
+        600,
+        700
+      ],
+      "italicWeights": [
+        400,
+        700
+      ],
+      "aliases": []
+    },
+    {
+      "name": "Rubik",
+      "slug": "rubik",
+      "category": "sans",
+      "weights": [
+        300,
+        400,
+        500,
+        600,
+        700
+      ],
+      "italicWeights": [
+        400,
+        700
+      ],
+      "aliases": []
+    },
+    {
+      "name": "IBM Plex Sans",
+      "slug": "ibm-plex-sans",
+      "category": "sans",
+      "weights": [
+        300,
+        400,
+        500,
+        600,
+        700
+      ],
+      "italicWeights": [
+        400,
+        700
+      ],
+      "aliases": [
+        "IBMPlexSans"
+      ]
+    },
+    {
+      "name": "Source Sans 3",
+      "slug": "source-sans-3",
+      "category": "sans",
+      "weights": [
+        300,
+        400,
+        500,
+        600,
+        700
+      ],
+      "italicWeights": [
+        400,
+        700
+      ],
+      "aliases": [
+        "Source Sans Pro",
+        "Source Sans"
+      ]
+    },
+    {
+      "name": "Noto Sans",
+      "slug": "noto-sans",
+      "category": "sans",
+      "weights": [
+        400,
+        500,
+        600,
+        700
+      ],
+      "italicWeights": [
+        400,
+        700
+      ],
+      "aliases": []
+    },
+    {
+      "name": "Oswald",
+      "slug": "oswald",
+      "category": "display",
+      "weights": [
+        300,
+        400,
+        500,
+        600,
+        700
+      ],
+      "italicWeights": [],
+      "aliases": []
+    },
+    {
+      "name": "Bebas Neue",
+      "slug": "bebas-neue",
+      "category": "display",
+      "weights": [
+        400
+      ],
+      "italicWeights": [],
+      "aliases": []
+    },
+    {
+      "name": "Anton",
+      "slug": "anton",
+      "category": "display",
+      "weights": [
+        400
+      ],
+      "italicWeights": [],
+      "aliases": []
+    },
+    {
+      "name": "Playfair Display",
+      "slug": "playfair-display",
+      "category": "serif",
+      "weights": [
+        400,
+        500,
+        600,
+        700,
+        800,
+        900
+      ],
+      "italicWeights": [
+        400,
+        700
+      ],
+      "aliases": [
+        "PlayfairDisplay"
+      ]
+    },
+    {
+      "name": "Merriweather",
+      "slug": "merriweather",
+      "category": "serif",
+      "weights": [
+        300,
+        400,
+        500,
+        600,
+        700,
+        900
+      ],
+      "italicWeights": [
+        400,
+        700
+      ],
+      "aliases": []
+    },
+    {
+      "name": "Lora",
+      "slug": "lora",
+      "category": "serif",
+      "weights": [
+        400,
+        500,
+        600,
+        700
+      ],
+      "italicWeights": [
+        400,
+        700
+      ],
+      "aliases": []
+    },
+    {
+      "name": "Libre Baskerville",
+      "slug": "libre-baskerville",
+      "category": "serif",
+      "weights": [
+        400,
+        700
+      ],
+      "italicWeights": [
+        400,
+        700
+      ],
+      "aliases": []
+    },
+    {
+      "name": "EB Garamond",
+      "slug": "eb-garamond",
+      "category": "serif",
+      "weights": [
+        400,
+        500,
+        600,
+        700,
+        800
+      ],
+      "italicWeights": [
+        400,
+        700
+      ],
+      "aliases": [
+        "EBGaramond"
+      ]
+    },
+    {
+      "name": "DM Serif Display",
+      "slug": "dm-serif-display",
+      "category": "serif",
+      "weights": [
+        400
+      ],
+      "italicWeights": [
+        400
+      ],
+      "aliases": []
+    },
+    {
+      "name": "Instrument Serif",
+      "slug": "instrument-serif",
+      "category": "serif",
+      "weights": [
+        400
+      ],
+      "italicWeights": [
+        400
+      ],
+      "aliases": []
+    },
+    {
+      "name": "Source Serif 4",
+      "slug": "source-serif-4",
+      "category": "serif",
+      "weights": [
+        300,
+        400,
+        500,
+        600,
+        700
+      ],
+      "italicWeights": [
+        400,
+        700
+      ],
+      "aliases": [
+        "Source Serif Pro",
+        "Source Serif"
+      ]
+    },
+    {
+      "name": "Fraunces",
+      "slug": "fraunces",
+      "category": "serif",
+      "weights": [
+        300,
+        400,
+        500,
+        600,
+        700,
+        900
+      ],
+      "italicWeights": [
+        400,
+        700
+      ],
+      "aliases": []
+    },
+    {
+      "name": "JetBrains Mono",
+      "slug": "jetbrains-mono",
+      "category": "mono",
+      "weights": [
+        300,
+        400,
+        500,
+        600,
+        700,
+        800
+      ],
+      "italicWeights": [
+        400,
+        700
+      ],
+      "aliases": [
+        "JetBrainsMono"
+      ]
+    },
+    {
+      "name": "IBM Plex Mono",
+      "slug": "ibm-plex-mono",
+      "category": "mono",
+      "weights": [
+        300,
+        400,
+        500,
+        600,
+        700
+      ],
+      "italicWeights": [
+        400,
+        700
+      ],
+      "aliases": [
+        "IBMPlexMono"
+      ]
+    },
+    {
+      "name": "Fira Code",
+      "slug": "fira-code",
+      "category": "mono",
+      "weights": [
+        300,
+        400,
+        500,
+        600,
+        700
+      ],
+      "italicWeights": [],
+      "aliases": [
+        "FiraCode"
+      ]
+    },
+    {
+      "name": "Roboto Mono",
+      "slug": "roboto-mono",
+      "category": "mono",
+      "weights": [
+        300,
+        400,
+        500,
+        600,
+        700
+      ],
+      "italicWeights": [
+        400,
+        700
+      ],
+      "aliases": []
+    },
+    {
+      "name": "Space Mono",
+      "slug": "space-mono",
+      "category": "mono",
+      "weights": [
+        400,
+        700
+      ],
+      "italicWeights": [
+        400,
+        700
+      ],
+      "aliases": []
+    },
+    {
+      "name": "Geist Mono",
+      "slug": "geist-mono",
+      "category": "mono",
+      "weights": [
+        300,
+        400,
+        500,
+        600,
+        700,
+        800
+      ],
+      "italicWeights": [
+        400,
+        700
+      ],
+      "aliases": []
+    }
+  ]
+}

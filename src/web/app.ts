@@ -2,6 +2,7 @@
 import { indexDoc, type Box, type TandemDoc, type TandemNode, type Page } from '../shared/model.ts';
 import { renderPage } from '../shared/render.ts';
 import { isAuto, type Boxes } from '../shared/layout.ts';
+import { FAMILIES, familyInfo, matchWeight, normalizeFamily } from '../shared/fonts.ts';
 
 interface Me { name: string; role: 'owner' | 'editor' | 'viewer'; version: string; publicUrl: string }
 interface Rev { rev: number; author: string; message: string; time: string; changed: string[] }
@@ -333,13 +334,17 @@ function designPanel(): string {
       <label class="check"><input type="checkbox" data-prop="clip" data-kind="bool" ${n.clip !== false ? 'checked' : ''}> Clip content</label></div>`;
   }
   if (n.type === 'text') {
+    const fam = familyInfo(n.fontFamily);
+    const weights = fam ? fam.weights : [100, 200, 300, 400, 500, 600, 700, 800, 900];
+    // show the weight that actually renders (CSS matching), so the panel never claims a face that is not there
+    const shownWeight = String(fam ? matchWeight(fam.weights, n.fontWeight ?? 400) : (n.fontWeight ?? 400));
     h += `<div class="insp"><h3>Text</h3><textarea class="field-area" data-prop="text" data-kind="str" rows="3">${esc(n.text ?? '')}</textarea>
-      <label class="field"><span>Font</span><input data-prop="fontFamily" data-kind="str" value="${esc(n.fontFamily ?? '')}" placeholder="Helvetica Neue"></label>
-      <div class="grid">${num('fontSize', 'Size', n.fontSize ?? 16)}${sel('fontWeight', 'Wt', String(n.fontWeight ?? 400), ['100', '200', '300', '400', '500', '600', '700', '800', '900'])}</div>
+      <label class="field"><span>Font</span><input data-prop="fontFamily" data-kind="str" list="font-families" value="${esc(n.fontFamily ?? '')}" placeholder="Inter"></label>
+      <div class="grid">${num('fontSize', 'Size', n.fontSize ?? 16)}${sel('fontWeight', 'Wt', shownWeight, weights.map(String))}</div>
       <div class="grid">${num('lineHeight', 'LH', n.lineHeight ?? 1.3, 0.05)}${num('letterSpacing', 'LS', n.letterSpacing ?? 0, 0.1)}</div>
       <div class="seg">${['left', 'center', 'right'].map((a) => `<button data-set-align="${a}" class="${(n.textAlign ?? 'left') === a ? 'on' : ''}">${a}</button>`).join('')}</div>
       ${colorField('color', 'Color', n.color ?? '#111111', false)}
-      <label class="check"><input type="checkbox" data-prop="italic" data-kind="bool" ${n.italic ? 'checked' : ''}> Italic</label></div>`;
+      <label class="check${fam && !fam.italics.length ? ' disabled' : ''}"${fam && !fam.italics.length ? ' title="This family has no italic face. Pick a family with italics, or leave italic off."' : ''}><input type="checkbox" data-prop="italic" data-kind="bool" ${n.italic ? 'checked' : ''}${fam && !fam.italics.length ? ' disabled' : ''}> Italic</label></div>`;
   }
   if (n.type === 'image') {
     h += `<div class="insp"><h3>Image</h3>${sel('fit', 'Fit', n.fit ?? 'cover', ['cover', 'contain', 'fill'])}
@@ -440,6 +445,15 @@ async function onPanelChange(e: Event) {
   }
   if (kind === 'str' && prop !== 'text' && value === '') { unset.push(prop); value = undefined; }
   if (prop === 'fontWeight') value = Number(value);
+  // picking a family also picks the CSS-matched weight that family actually ships, like Figma's face list
+  if (prop === 'fontFamily' && typeof value === 'string') {
+    const fam = familyInfo(normalizeFamily(value));
+    if (fam && !fam.weights.includes(Number(n.fontWeight ?? 400))) {
+      await ops([{ op: 'update', id: n.id, props: { fontFamily: fam.name, fontWeight: matchWeight(fam.weights, Number(n.fontWeight ?? 400)) } }], `Set font to ${fam.name}`);
+      return;
+    }
+    if (fam) value = fam.name;
+  }
   if (value === null && prop === 'stroke') { unset.push('stroke'); value = undefined; }
   if (value === undefined && !unset.length) unset.push(prop);
   const props = value === undefined ? {} : { [prop]: value };
@@ -705,7 +719,7 @@ async function onPointerUp(e: PointerEvent) {
     const pb = parent ? S.boxes.get(parent.id)! : null;
     const node: Record<string, unknown> = { type: tool };
     if (!parent || !isAuto(parent)) { node.x = Math.round(box.x - (pb?.x ?? 0)); node.y = Math.round(box.y - (pb?.y ?? 0)); }
-    if (tool === 'text') { node.text = 'Text'; node.fontSize = 16; if (!small) node.width = Math.round(box.w); }
+    if (tool === 'text') { node.text = 'Text'; node.fontSize = 16; node.fontFamily = 'Inter'; if (!small) node.width = Math.round(box.w); }
     else { node.width = Math.round(box.w); node.height = Math.round(box.h); }
     if (tool === 'frame') { node.fill = '#ffffff'; node.name = parent ? 'Frame' : `Frame ${page()!.children.filter((n) => n.type === 'frame').length + 1}`; }
     const res = await ops([{ op: 'create', parent: parent?.id ?? S.pageId, node }], `Added ${tool}`);
@@ -1107,6 +1121,11 @@ function inlineRename(el: HTMLElement, current: string, done: (v: string) => unk
 }
 
 async function boot() {
+  // suggestions for the font field: every bundled family, grouped by category
+  const list = document.createElement('datalist');
+  list.id = 'font-families';
+  list.innerHTML = FAMILIES.map((f) => `<option value="${esc(f.name)}">${esc(f.category)} · ${f.weights.join(' ')}${f.italics.length ? ' · italic' : ''}</option>`).join('');
+  document.body.append(list);
   S.me = await api<Me>('/api/me');
   wire();
   setTool('select');

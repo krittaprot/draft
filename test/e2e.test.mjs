@@ -245,6 +245,27 @@ test('signed-out visitors get the homepage; the app is installable', async () =>
   }
 });
 
+test('bundled fonts are served and listed for agents', async () => {
+  const css = await fetch(`${base}/fonts.css`);
+  assert.equal(css.status, 200);
+  const rules = await css.text();
+  assert.match(rules, /@font-face\{font-family:"Inter"/);
+  assert.match(rules, /font-weight:700/);
+  const file = /url\("(\/fonts\/inter\/700\.ttf\?v=[0-9a-f]{12})"\)/.exec(rules)?.[1];
+  assert.ok(file, 'fonts.css points at a versioned Inter face');
+  const ttf = await fetch(`${base}${file}`);
+  assert.equal(ttf.status, 200);
+  assert.equal(ttf.headers.get('content-type'), 'font/ttf');
+  assert.match(ttf.headers.get('cache-control'), /immutable/, 'a versioned font URL is immutable');
+  assert.ok((await ttf.arrayBuffer()).byteLength > 10_000, 'a real font binary, not an HTML error page');
+  assert.equal((await fetch(`${base}/fonts/inter/does-not-exist.ttf`)).status, 404);
+
+  const c = await connect(owner);
+  const list = textOf(await call(c, 'list_fonts', {}));
+  for (const family of ['Inter', 'Geist Mono', 'Playfair Display', 'JetBrains Mono']) assert.ok(list.includes(family), family);
+  await c.close();
+});
+
 test('home screen thumbnails: a picture for designs, nothing for empty ones', async () => {
   const h = { authorization: `Bearer ${owner}`, 'content-type': 'application/json' };
   const empty = await (await fetch(`${base}/api/docs`, { method: 'POST', headers: h, body: JSON.stringify({ name: 'Blank' }) })).json();
@@ -277,4 +298,45 @@ test('pages load versioned scripts and images, so a release never shows a cached
   assert.ok(manifest.icons.every((i) => /\?v=[0-9a-f]{10}$/.test(i.src)), 'manifest icons are versioned');
   const icon = await fetch(`${base}/icons/icon-192.png`);
   assert.equal(icon.headers.get('cdn-cache-control'), 'no-store', 'the CDN never keeps an unversioned icon');
+});
+
+test('text is measured with each family\'s real metrics, and missing fonts are reported', async () => {
+  const c = await connect(owner);
+  const doc = /d_[a-z0-9]+/.exec(textOf(await call(c, 'create_document', { name: 'Metrics' })))[0];
+  const res = await call(c, 'create_nodes', {
+    document: doc,
+    nodes: [
+      { type: 'text', id: 'light', text: 'Hamburgefonstiv', fontFamily: 'inter', fontWeight: 400, fontSize: 100 },
+      { type: 'text', id: 'bold', text: 'Hamburgefonstiv', fontFamily: 'Inter', fontWeight: 800, fontSize: 100 },
+      { type: 'text', id: 'mono', text: 'Hamburgefonstiv', fontFamily: 'JetBrains Mono', fontWeight: 400, fontSize: 100 },
+    ],
+  });
+  const width = async (id) => JSON.parse(textOf(await call(c, 'get_node', { document: doc, id }))).box.w;
+  const light = await width('light'), bold = await width('bold'), mono = await width('mono');
+  assert.ok(bold > light, `weight 800 must be wider than 400 (${bold} vs ${light})`);
+  assert.notEqual(mono, light, 'different families must not share Helvetica metrics');
+  const node = JSON.parse(textOf(await call(c, 'get_node', { document: doc, id: 'light' }))).node;
+  assert.equal(node.fontFamily, 'Inter', 'family names are normalized to the catalogue spelling');
+  assert.ok(!textOf(res).includes('unknown font'));
+
+  const warn = await call(c, 'create_nodes', { document: doc, nodes: [{ type: 'text', text: 'Hi', fontFamily: 'Comic Sans MS', fontSize: 14 }] });
+  assert.match(textOf(warn), /unknown font: Comic Sans MS/);
+  await c.close();
+});
+
+test('weight matching follows CSS, and italics without a face are reported', async () => {
+  const c = await connect(owner);
+  const doc = /d_[a-z0-9]+/.exec(textOf(await call(c, 'create_document', { name: 'Weights' })))[0];
+  const node = (id, weight, italic = false) => ({ type: 'text', id, text: 'Hamburgefonstiv', fontFamily: 'Lato', fontWeight: weight, italic, fontSize: 100 });
+  await call(c, 'create_nodes', { document: doc, nodes: [node('l300', 300), node('l400', 400), node('l350', 350), node('l450', 450), node('l700', 700), node('l800', 800), node('l900', 900)] });
+  const width = async (id) => JSON.parse(textOf(await call(c, 'get_node', { document: doc, id }))).box.w;
+  assert.equal(await width('l350'), await width('l300'), '350 resolves to 300 (lighter side first), not 400');
+  assert.equal(await width('l450'), await width('l400'), '450 resolves to 400 (lighter side first), not 700');
+  assert.notEqual(await width('l300'), await width('l400'));
+  assert.equal(await width('l800'), await width('l900'), '800 resolves up to 900, not down to 700');
+  assert.notEqual(await width('l800'), await width('l700'));
+
+  const mono = await call(c, 'create_nodes', { document: doc, nodes: [{ type: 'text', text: 'Slanted?', fontFamily: 'Manrope', italic: true, fontSize: 20 }] });
+  assert.match(textOf(mono), /no italic face for Manrope/);
+  await c.close();
 });

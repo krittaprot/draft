@@ -2,7 +2,8 @@
 // rasterises the same markup to PNG for screenshots, so agents and humans see identical output.
 import { DEFAULT_FONT, type Box, type TandemNode, type Fill, type Page } from './model.ts';
 import { layoutPage, unionBox, type Boxes } from './layout.ts';
-import { measureText, textStyle } from './text.ts';
+import { measureText, textStyle, baselineOffset } from './text.ts';
+import { cssFamily } from './fonts.ts';
 
 export interface RenderOptions {
   /** Maps an image src (asset id, data URL) to an href usable in this context, or null if unavailable. */
@@ -128,14 +129,14 @@ function renderNode(ctx: Ctx, n: TandemNode): string {
       const anchor = n.textAlign === 'center' ? 'middle' : n.textAlign === 'right' ? 'end' : 'start';
       const tx = n.textAlign === 'center' ? b.x + b.w / 2 : n.textAlign === 'right' ? b.x + b.w : b.x;
       const color = n.color ?? (typeof n.fill === 'string' ? n.fill : '#111111');
-      let t = `<text font-family="${esc(n.fontFamily ?? DEFAULT_FONT)}" font-size="${st.fontSize}" font-weight="${st.fontWeight}" fill="${esc(color)}" text-anchor="${anchor}" xml:space="preserve"`;
+      let t = `<text font-family="${esc(cssFamily(n.fontFamily ?? DEFAULT_FONT))}" font-size="${st.fontSize}" font-weight="${st.fontWeight}" fill="${esc(color)}" text-anchor="${anchor}" xml:space="preserve" style="font-synthesis:none"`;
       if (n.italic) t += ' font-style="italic"';
       if (st.letterSpacing) t += ` letter-spacing="${st.letterSpacing}"`;
       if (n.textDecoration && n.textDecoration !== 'none') t += ` text-decoration="${n.textDecoration}"`;
       t += '>';
       lines.forEach((line, i) => {
-        // baseline sits about 0.35em below the middle of the line box
-        const by = b.y + i * st.lineHeight + st.lineHeight / 2 + st.fontSize * 0.35;
+        // baseline from the face's own ascender/descender, centred in the line box (CSS half-leading)
+        const by = b.y + i * st.lineHeight + baselineOffset(st);
         t += `<tspan x="${r2(tx)}" y="${r2(by)}">${esc(line) || ' '}</tspan>`;
       });
       inner = t + '</text>';

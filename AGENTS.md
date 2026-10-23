@@ -22,11 +22,11 @@ It is a clean-room take on the Figma mental model: frames, auto-layout, layers. 
 
 | Path | What it holds |
 | --- | --- |
-| `src/shared/` | Code that runs on both server and browser. `model.ts` holds the types, `NODE_TYPES` and the `MODEL_GUIDE` text agents read. `layout.ts` is the auto-layout engine. `text.ts` holds Helvetica metrics and wrapping. `render.ts` turns a page into SVG. |
+| `src/shared/` | Code that runs on both server and browser. `model.ts` holds the types, `NODE_TYPES` and the `MODEL_GUIDE` text agents read. `layout.ts` is the auto-layout engine. `text.ts` measures and wraps with real per-face metrics from `fonts.ts`. `fonts.ts` + `font-catalog.json` + `font-data.ts` are the font registry. `render.ts` turns a page into SVG. |
 | `src/shared/schema.ts` | The zod prop schema. **Server only**: importing it from `src/web` pulls zod into the browser bundle (about 500 KB). Use `import type`. |
 | `src/server/store.ts` | File storage per document: gzipped snapshots for each revision, `history.jsonl`, `comments.json`. Deleting a document moves it to `trash/`. |
 | `src/server/ops.ts` | `applyOps`: create, update, delete, move, duplicate, page operations, rename. All edits go through here. |
-| `src/server/engine.ts` | Rendering (resvg PNG with a curated system-font list), share links, outline, HTML export, image fetch with an SSRF guard. |
+| `src/server/engine.ts` | Rendering (resvg PNG with the bundled families, macOS/Linux system fonts and `<data>/fonts`), font-usage warnings, share links, outline, HTML export, image fetch with an SSRF guard. |
 | `src/server/mcp.ts` | The MCP tools (`design_guide`, `create_nodes`, `screenshot` and the rest). Stateless streamable HTTP. |
 | `src/server/http.ts` | Every HTTP route: `/api/*`, SSE `/api/events`, sign-in, OAuth, static files, signed `/r/…png` links. |
 | `src/server/auth.ts` | Tokens (only hashes are stored), members, sessions, the email allowlist. `auth.json` is reloaded when its mtime changes. |
@@ -35,7 +35,8 @@ It is a clean-room take on the Figma mental model: frames, auto-layout, layers. 
 | `src/server/main.ts` | CLI: `serve`, `token`, `member`, `connect`, `stdio`, `info`. |
 | `src/web/app.ts` | The whole editor and home screen in one file: state `S`, `render()`, panels, pointer handling, keyboard, SSE. |
 | `src/web/*.html`, `*.css` | `index.html` (app), `landing.html` + `landing.css` + `tokens.css` (public homepage), `sw.js`, `pwa.js`, `manifest.webmanifest`, `offline.html`. |
-| `scripts/build.mjs` | esbuild bundles plus asset versioning (see Gotchas). |
+| `scripts/build.mjs` | esbuild bundles plus asset versioning (see Gotchas); syncs fonts and writes `dist/web/fonts.css`. |
+| `scripts/fonts.mjs` | Downloads the catalogued families from Google Fonts into `src/web/fonts/<slug>/` and generates `src/shared/font-data.ts` (advance widths, ascender/descender) from the binaries. `pnpm fonts`. |
 | `scripts/deploy.sh`, `install-service.sh`, `setup-tunnel.sh` | Release to `~/.local/share/tandem`, launchd jobs, Cloudflare tunnel. Settings come from `deploy/deploy.env`. |
 | `mac/` | Swift wrapper. `scripts/build-app.sh` builds `build/Tandem.app`. |
 | `test/` | `node --test` end-to-end tests over real MCP clients, plus OAuth tests. |
@@ -82,12 +83,14 @@ node dist/server.js serve --port 3299 --data <scratch dir> --public-url http://1
    - This exists because Cloudflare's zone browser-cache TTL rewrote `no-cache` to 4 hours, so an old `app.js` ran against a new `index.html` and crashed.
    - If you add a new script or stylesheet, add it to the list in `build.mjs`.
 2. **Shared code must stay browser-safe.** `src/shared` can't import node modules or zod.
-3. **Text metrics are Helvetica.** Wrapping is approximate for other fonts. Thai and CJK use wider estimates.
+3. **Fonts are measured, not approximated.** `scripts/fonts.mjs` reads advance widths and vertical metrics straight out of the TTFs into `src/shared/font-data.ts`; `text.ts` measures with the face the renderer will pick, so the SVG, the PNG and the browser editor wrap the same text the same way. Unknown families still fall back to Helvetica metrics. A few Google static instances are named per weight ("Poppins SemiBold"); the script rewrites their `name` table so resvg's fontdb can find them by family + weight. Thai and CJK still use estimates.
 4. **Undo is revision-based.** Cmd+Z restores the revision before your own last change. `undoChain` in `app.ts` makes repeated presses step further back. There is no redo.
 5. **The canvas is re-rendered on every change** (`world.innerHTML`), so event targets go stale. Hit-test with `document.elementFromPoint` when an event spans two clicks, like dblclick.
 6. **The drawing tool is captured at pointerdown** (`S.drag.tool`), because the previous shape's save can finish mid-drag.
 7. **Home and editor routing is hash-based.** `#doc=<id>[&node=<id>]` opens a design; anything else shows Home. Live SSE refreshes of Home must check `onHome()` so they don't cover the editor.
 8. **Read-only UI.** `body.readonly` is set for viewers and during revision preview, `body.viewer` for viewers. Mark edit-only inspector buttons `edit-only` and comment buttons `comment-only`.
+9. **Only `pnpm fonts` writes `font-data.ts`.** The build computes the same metrics in memory and fails when a declared face is missing or when a font file's hash no longer matches `src/shared/fonts.lock.json`, so a release cannot ship metrics, CSS and binaries that disagree. `DRAFT_FONTS_OFFLINE=1` warns instead, and `pnpm fonts:check` reports missing faces alone. Font URLs carry a content hash, so a stylesheet and its binaries are always the same pair.
+10. **No synthetic styles.** Canvas text sets `font-synthesis: none`: a weight the family lacks resolves to the nearest real face, and a family without italics stays upright. The editor disables the italic toggle for those families and the MCP tools return a warning. Declare italics only where Google ships them.
 
 ## Testing sign-in
 
@@ -115,6 +118,7 @@ Done and live:
 - **Sharing and sign-in:** share links, OAuth for connector apps, Google sign-in locked to the allowlist.
 - **Site:** the public homepage and the installable PWA.
 - **Editor QA pass:** every control was clicked through, and the bugs it found were fixed in commit `203e0b3`.
+- **Typography:** 39 bundled families (248 faces), real per-face metrics, css-matched weights, no synthetic styles, `list_fonts`, and font warnings for agents. See "Fonts" in the README.
 
 Open items, roughly by value:
 1. **Automated browser tests** (Playwright) for the editor flows listed under "Testing the editor". Today those checks are manual.
@@ -127,4 +131,4 @@ Open items, roughly by value:
    - Align and distribute.
    - On screens narrower than 900 px the side panels are hidden, so editing there is view-mostly.
 4. **Mac app** (`scripts/install.sh`) hasn't been rebuilt or reinstalled since the PWA and Home changes.
-5. **Fonts:** the editor uses Helvetica metrics; server screenshots use host fonts plus `<data>/fonts`. Using the same metrics in both would make text wrap identically.
+5. **Typography beyond the current set:** kerning/shaping (today measurement sums advance widths, so long strings can drift a few px), Thai/CJK widths and line breaking, and a `pnpm fonts add "<Family>"` command instead of hand-editing the catalogue.

@@ -16,10 +16,10 @@ import type { NeonLogin } from './neon.ts';
 const WEB_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'web');
 const TYPES: Record<string, string> = {
   js: 'text/javascript; charset=utf-8', css: 'text/css; charset=utf-8', png: 'image/png', woff2: 'font/woff2',
-  webmanifest: 'application/manifest+json', html: 'text/html; charset=utf-8',
+  ttf: 'font/ttf', otf: 'font/otf', webmanifest: 'application/manifest+json', html: 'text/html; charset=utf-8',
 };
-// public files of the web build: top-level assets plus fonts/, icons/ and shots/ (no other folders, no traversal)
-const PUBLIC_FILE = /^\/(?:(?:fonts|icons|shots)\/)?[A-Za-z0-9_-][A-Za-z0-9_.-]*\.(js|css|png|woff2|webmanifest)$/;
+// public files of the web build: top-level assets plus fonts/ (optionally one family folder), icons/ and shots/
+const PUBLIC_FILE = /^\/(?:(?:fonts(?:\/[a-z0-9_-]+)?|icons|shots)\/)?[A-Za-z0-9_-][A-Za-z0-9_.-]*\.(js|css|png|woff2|ttf|otf|webmanifest)$/;
 const PAGE_CSP = "default-src 'self'; img-src 'self' data:; style-src 'self'; font-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'";
 const MAX_BODY = 20 * 1024 * 1024;
 
