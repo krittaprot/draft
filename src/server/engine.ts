@@ -241,9 +241,14 @@ export class Engine {
     return { total, describe, lines: lines.slice(0, limit) };
   }
 
-  /** WCAG contrast for every text node against the colour actually behind it. */
-  auditContrast(doc: TandemDoc, pageId?: string) {
-    const out: string[] = [];
+  /**
+   * WCAG contrast for every text node against the colour actually behind it. Gradients are evaluated
+   * against every stop and reported at their worst; text over an image cannot be judged from geometry,
+   * so it is counted as unverified instead of guessed.
+   */
+  auditContrast(doc: TandemDoc, pageId?: string): { failures: string[]; unverified: number } {
+    const failures: string[] = [];
+    let unverified = 0;
     for (const page of doc.pages) {
       if (pageId && page.id !== pageId) continue;
       walk({ ...doc, pages: [page] }, ({ node }) => {
@@ -251,20 +256,28 @@ export class Engine {
         const cfg = varLookup(doc, node.color);
         const ffg = varLookup(doc, node.fill);
         const fgRaw = (typeof cfg === 'string' ? cfg : null) ?? (typeof ffg === 'string' ? ffg : '#111111');
-        const bgRaw = backdropOf(doc, page, node.id);
         const fg = parseColor(fgRaw);
-        const bg = bgRaw ? parseColor(bgRaw) : null;
-        if (!fg || !bg) return;
-        const ratio = contrastRatio(fg, bg);
+        if (!fg) return;
+        const backdrop = backdropOf(doc, page, node.id);
+        if (backdrop.image) { unverified++; return; }
+        let worst: { ratio: number; bg: string; rgba: NonNullable<ReturnType<typeof parseColor>> } | null = null;
+        for (const c of backdrop.colors) {
+          const b = parseColor(c);
+          if (!b) continue;
+          const r = contrastRatio(fg, b);
+          if (!worst || r < worst.ratio) worst = { ratio: r, bg: c, rgba: b };
+        }
+        if (!worst) return;
         const size = node.fontSize ?? 16;
         const large = size >= 24 || (size >= 18.66 && (node.fontWeight ?? 400) >= 700);
         const need = large ? 3 : 4.5;
-        if (ratio + 0.005 >= need) return;
-        const hint = suggestToken(doc, fg, bg, need);
-        out.push(`${node.id} "${(node.text ?? '').slice(0, 44).replace(/\n/g, '⏎')}" ${fgRaw} on ${bgRaw} → ${ratio.toFixed(2)}:1, needs ${need}:1${hint}`);
+        if (worst.ratio + 0.005 >= need) return;
+        const hint = suggestToken(doc, fg, worst.rgba, need);
+        const where = `${worst.bg}${backdrop.gradient ? ' (gradient stop)' : ''}`;
+        failures.push(`${node.id} "${(node.text ?? '').slice(0, 44).replace(/\n/g, '⏎')}" ${fgRaw} on ${where} → ${worst.ratio.toFixed(2)}:1, needs ${need}:1${hint}`);
       });
     }
-    return out;
+    return { failures, unverified };
   }
 
   /** The document's tokens as CSS custom properties, DTCG-shaped JSON and a Tailwind @theme block. */
@@ -516,21 +529,44 @@ function varLookup(doc: TandemDoc, value: unknown): unknown {
   return m ? (doc.variables?.[m[1]] ?? value) : value;
 }
 
-function backdropOf(doc: TandemDoc, page: Page, nodeId: string): string | null {
+interface Backdrop {
+  /** Every colour the text could be sitting on, worst case included (gradient stops expand this). */
+  colors: string[];
+  gradient: boolean;
+  /** An image sits behind the text, so the contrast cannot be computed from the document. */
+  image: boolean;
+}
+
+function backdropOf(doc: TandemDoc, page: Page, nodeId: string): Backdrop {
   const idx = indexDoc(doc);
   const chain: TandemNode[] = [];
   for (let w = idx.get(nodeId)?.parent; w; w = idx.get(w.id)?.parent) chain.unshift(w);
-  let acc = page.background ?? '#ffffff';
+  let colors = [page.background ?? '#ffffff'];
+  let gradient = false;
   for (const n of chain) {
+    if (n.type === 'image' || (typeof n.src === 'string' && n.src)) return { colors, gradient, image: true };
     const f = varLookup(doc, n.fill);
-    if (typeof f === 'string') acc = flattenOver(f, acc);
+    if (typeof f === 'string') { colors = colors.map((c) => flattenOver(f, c)); continue; }
+    const paints = Array.isArray(f) ? f : f ? [f] : [];
+    const stops: string[] = [];
+    for (const p of paints) {
+      if (typeof p === 'string') stops.push(p);
+      else if (p && typeof p === 'object' && Array.isArray((p as { stops?: unknown }).stops)) {
+        gradient = true;
+        for (const s of (p as { stops: { color?: unknown }[] }).stops) if (typeof s.color === 'string') stops.push(s.color);
+      }
+    }
+    if (!stops.length) continue;
+    const next = new Set<string>();
+    for (const c of colors) for (const s of stops.slice(0, 8)) next.add(flattenOver(s, c));
+    colors = [...next].slice(0, 8);
   }
-  return acc;
+  return { colors, gradient, image: false };
 }
 
 /** Alpha-resolved colours for a node, so exports and reviews can see the flat value. */
 function computedColors(doc: TandemDoc, page: Page, node: TandemNode): Record<string, string> {
-  const bg = backdropOf(doc, page, node.id) ?? page.background ?? '#ffffff';
+  const bg = backdropOf(doc, page, node.id).colors[0] ?? page.background ?? '#ffffff';
   const out: Record<string, string> = {};
   const fill = varLookup(doc, node.fill);
   const color = varLookup(doc, node.color);

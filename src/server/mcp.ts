@@ -300,13 +300,14 @@ export function buildMcpServer(engine: Engine, who: Principal): McpServer {
   }));
 
   server.registerTool('audit_contrast', {
-    title: 'Audit contrast', description: 'Checks every text node against the colour actually behind it (including alpha layers) and reports the WCAG ratio, with the closest passing token from the document where there is one.',
+    title: 'Audit contrast', description: 'Checks every text node against the colour actually behind it (alpha layers and every gradient stop, reported at the worst) and returns the WCAG ratio, with the closest passing token from the document where there is one.',
     inputSchema: { document: docArg, page: z.string().optional() },
     annotations: { readOnlyHint: true },
   }, reader((a: { document: string; page?: string }) => {
-    const rows = engine.auditContrast(store.getDoc(a.document), a.page);
-    if (!rows.length) return text('All text passes WCAG AA against its backdrop.');
-    return text(`${rows.length} contrast failure${rows.length === 1 ? '' : 's'}:\n${rows.join('\n')}`);
+    const { failures, unverified } = engine.auditContrast(store.getDoc(a.document), a.page);
+    const note = unverified ? `\n${unverified} text node${unverified === 1 ? ' sits' : 's sit'} on an image and could not be checked.` : '';
+    if (!failures.length) return text(`All text passes WCAG AA against its backdrop.${note}`);
+    return text(`${failures.length} contrast failure${failures.length === 1 ? '' : 's'}:\n${failures.join('\n')}${note}`);
   }));
 
   server.registerTool('upload_image', {

@@ -406,6 +406,17 @@ test('variables, components, states and bulk edits compose the way the docs say'
   assert.match(audit, /1\.4\d:1/);
   assert.match(audit, /needs 4\.5:1/);
 
+  // a gradient backdrop is judged by its worst stop, not mistaken for the page background
+  await call(c, 'create_nodes', { document: doc, nodes: [
+    { type: 'frame', id: 'lock', width: 300, height: 200, fill: [{ type: 'radial', stops: [{ offset: 0, color: '#1d3a7a' }, { offset: 1, color: '#0a1630' }] }],
+      children: [{ type: 'text', id: 'hello', text: 'Welcome back', fontSize: 20, color: '#ffffff' }] },
+    { type: 'frame', id: 'paper-white', width: 200, height: 80, fill: '#ffffff',
+      children: [{ type: 'text', id: 'ghost', text: 'Invisible', fontSize: 12, color: '#ffffff' }] },
+  ] });
+  const audit2 = textOf(await call(c, 'audit_contrast', { document: doc }));
+  assert.doesNotMatch(audit2, /hello/, 'white on a navy gradient passes');
+  assert.match(audit2, /ghost .*1\.00:1/, 'white on white is still a failure');
+
   // truncation ends the visible text with an ellipsis
   await call(c, 'create_nodes', { document: doc, nodes: [{ type: 'text', id: 'tip', text: 'A tooltip that is far too long for the space it was given', width: 90, wrap: 'truncate', fontSize: 13 }] });
   assert.match(await svg('tip'), /…/);
