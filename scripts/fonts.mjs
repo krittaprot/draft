@@ -19,6 +19,9 @@ const sha = (buf) => crypto.createHash('sha256').update(buf).digest('hex').slice
 const UA = 'Mozilla/4.0 (compatible; Draft font sync)'; // an old UA asks fonts.googleapis.com for plain TTF
 // Character ranges stored per face: ASCII + Latin-1/Latin Extended-A, general punctuation, currency signs.
 export const RANGES = [[32, 383], [8208, 8303], [8352, 8383]];
+// Symbols are sparse in most faces, so they are stored per codepoint instead of as a dense range.
+// This is what lets measurement find the real width of ⌘, ✓, ★ in the face that will draw them.
+export const SYMBOLS = [0x2000, 0x27bf];
 
 const readU16 = (b, o) => b.readUInt16BE(o);
 const readI16 = (b, o) => b.readInt16BE(o);
@@ -116,11 +119,16 @@ export function parseFont(buf, weight = 400, italic = false) {
   const letters = [];
   for (let c = 97; c <= 122; c++) if (cmap.has(c)) letters.push(adv(cmap.get(c)));
   const avg = letters.length ? Math.round(letters.reduce((a, b) => a + b, 0) / letters.length) : Math.round(upem / 2);
+  const sym = {};
+  for (let c = SYMBOLS[0]; c <= SYMBOLS[1]; c++) {
+    const gid = cmap.get(c);
+    if (gid !== undefined) sym[c] = adv(gid);
+  }
 
   const b64 = Buffer.from(new Uint16Array(widths).buffer).toString('base64');
   return {
     upem, asc: Math.abs(asc), desc: -Math.abs(desc), cap, xh, avg, weight, italic,
-    glyphs: cmap.size, w: b64,
+    glyphs: cmap.size, w: b64, sym,
   };
 }
 
@@ -340,6 +348,8 @@ export interface FaceData {
   glyphs: number;
   /** base64 of the little-endian uint16 advance widths for RANGES, in font units */
   w: string;
+  /** advance widths (font units) for symbol codepoints the face covers */
+  sym: Record<string, number>;
 }
 
 export const RANGES: [number, number][] = ${JSON.stringify(metrics.ranges)};

@@ -5,11 +5,15 @@ import { fileURLToPath } from 'node:url';
 import dns from 'node:dns/promises';
 import net from 'node:net';
 import { Resvg } from '@resvg/resvg-js';
-import { DEFAULT_FONT, indexDoc, type Box, type TandemDoc, type TandemNode, type Page } from '../shared/model.ts';
+import { DEFAULT_FONT, indexDoc, walk, type Box, type TandemDoc, type TandemNode, type Page } from '../shared/model.ts';
 import { renderPage } from '../shared/render.ts';
 import { layoutPage, padding as padOf, type Boxes } from '../shared/layout.ts';
-import { textStyle } from '../shared/text.ts';
+import { measureText, textStyle } from '../shared/text.ts';
 import { cssFamily, isKnownFamily, italicWeights, normalizeFamily } from '../shared/fonts.ts';
+import { resolvePage } from '../shared/resolve.ts';
+import { flattenOver, parseColor, contrastRatio, luminance } from '../shared/color.ts';
+import { compilePredicate, type Predicate } from '../shared/predicate.ts';
+import { variablesSchema } from '../shared/schema.ts';
 import { applyOps, OpError, type Op } from './ops.ts';
 import { isAssetId, type Store } from './store.ts';
 import type { Auth } from './auth.ts';
@@ -68,14 +72,15 @@ export class Engine {
     return p;
   }
 
-  async apply(docId: string, ops: Op[], author: string, message: string) {
+  async apply(docId: string, ops: Op[], author: string, message: string, opts: { atomic?: boolean } = {}) {
     const prepared = this.normalizeFonts(await this.resolveRemoteImages(ops));
     const cur = this.store.getDoc(docId);
-    const r = applyOps(cur, prepared);
+    const r = applyOps(cur, prepared, { atomic: opts.atomic });
     const rev = this.store.commit(r.doc, { author, message, changed: r.changed });
     return {
-      rev: rev.rev, created: r.created, changed: r.changed,
+      rev: rev.rev, created: r.created, changed: r.changed, errors: r.errors,
       fontIssues: fontIssues(r.doc, this.fontTouchedIds(prepared, r.created)),
+      warnings: this.warnings(r.doc, this.page(r.doc)),
     };
   }
 
@@ -168,12 +173,13 @@ export class Engine {
 
   // ---------- rendering ----------
 
-  renderSVG(doc: TandemDoc, opts: { pageId?: string; nodeId?: string; padding?: number }) {
+  renderSVG(doc: TandemDoc, opts: { pageId?: string; nodeId?: string; padding?: number; states?: Record<string, string> }) {
     const page = this.page(doc, opts.pageId, opts.nodeId);
-    return renderPage(page, { assetHref: this.inlineAsset }, opts.nodeId, opts.padding ?? (opts.nodeId ? 0 : 40));
+    const { page: resolved, issues } = resolvePage(page, doc, { states: opts.states });
+    return { ...renderPage(resolved, { assetHref: this.inlineAsset }, opts.nodeId, opts.padding ?? (opts.nodeId ? 0 : 40)), issues };
   }
 
-  renderPNG(doc: TandemDoc, opts: { pageId?: string; nodeId?: string; scale?: number; maxSide?: number; padding?: number }) {
+  renderPNG(doc: TandemDoc, opts: { pageId?: string; nodeId?: string; scale?: number; maxSide?: number; padding?: number; states?: Record<string, string> }) {
     const r = this.renderSVG(doc, opts);
     if (!r.body) throw new OpError('nothing to render: the page is empty');
     const side = Math.max(r.box.w, r.box.h);
@@ -185,7 +191,7 @@ export class Engine {
       font: { loadSystemFonts: false, fontFiles: this.fonts, defaultFontFamily: this.defaultFamily, sansSerifFamily: this.defaultFamily },
       imageRendering: 0,
     }).render().asPng();
-    return { png: Buffer.from(png), width: Math.round(r.box.w * scale), height: Math.round(r.box.h * scale), box: r.box, scale };
+    return { png: Buffer.from(png), width: Math.round(r.box.w * scale), height: Math.round(r.box.h * scale), box: r.box, scale, issues: r.issues };
   }
 
   /** A link that shows this exact revision as a PNG without logging in. Valid for 30 days. */
@@ -199,6 +205,109 @@ export class Engine {
     return `${this.publicUrl}/#doc=${docId}${nodeId ? `&node=${encodeURIComponent(nodeId)}` : ''}`;
   }
 
+  // ---------- checks ----------
+
+  /** Dry run: applies ops to a copy and reports what would fail, without committing. */
+  validateOps(docId: string, ops: Op[]) {
+    const doc = this.store.getDoc(docId);
+    const prepared = this.normalizeFonts(ops);
+    const r = applyOps(doc, prepared, { atomic: false });
+    return {
+      ok: (r.errors ?? []).length === 0,
+      errors: r.errors ?? [],
+      wouldCreate: r.created.length,
+      wouldChange: r.changed.length,
+      warnings: this.warnings(r.doc, this.page(r.doc)),
+    };
+  }
+
+  /** Finds nodes by property instead of id, so a small fix does not need a full tree read. */
+  find(doc: TandemDoc, where: Predicate, pageId?: string, limit = 50) {
+    const { matches, describe } = compilePredicate(where);
+    const lines: string[] = [];
+    let total = 0;
+    for (const page of doc.pages) {
+      if (pageId && page.id !== pageId) continue;
+      const boxes = layoutPage(resolvePage(page, doc).page);
+      walk({ ...doc, pages: [page] }, ({ node }) => {
+        if (!matches(node)) return;
+        total++;
+        const b = boxes.get(node.id);
+        const box = b ? `${Math.round(b.w)}x${Math.round(b.h)} at ${Math.round(b.x)},${Math.round(b.y)}` : 'no box';
+        const text = node.type === 'text' ? ` "${(node.text ?? '').slice(0, 40).replace(/\n/g, '⏎')}"` : '';
+        lines.push(`${node.id} ${node.type}${node.name ? ` "${node.name}"` : ''} ${box}${text}`);
+      });
+    }
+    return { total, describe, lines: lines.slice(0, limit) };
+  }
+
+  /** WCAG contrast for every text node against the colour actually behind it. */
+  auditContrast(doc: TandemDoc, pageId?: string) {
+    const out: string[] = [];
+    for (const page of doc.pages) {
+      if (pageId && page.id !== pageId) continue;
+      walk({ ...doc, pages: [page] }, ({ node }) => {
+        if (node.type !== 'text' || node.visible === false) return;
+        const cfg = varLookup(doc, node.color);
+        const ffg = varLookup(doc, node.fill);
+        const fgRaw = (typeof cfg === 'string' ? cfg : null) ?? (typeof ffg === 'string' ? ffg : '#111111');
+        const bgRaw = backdropOf(doc, page, node.id);
+        const fg = parseColor(fgRaw);
+        const bg = bgRaw ? parseColor(bgRaw) : null;
+        if (!fg || !bg) return;
+        const ratio = contrastRatio(fg, bg);
+        const size = node.fontSize ?? 16;
+        const large = size >= 24 || (size >= 18.66 && (node.fontWeight ?? 400) >= 700);
+        const need = large ? 3 : 4.5;
+        if (ratio + 0.005 >= need) return;
+        const hint = suggestToken(doc, fg, bg, need);
+        out.push(`${node.id} "${(node.text ?? '').slice(0, 44).replace(/\n/g, '⏎')}" ${fgRaw} on ${bgRaw} → ${ratio.toFixed(2)}:1, needs ${need}:1${hint}`);
+      });
+    }
+    return out;
+  }
+
+  /** The document's tokens as CSS custom properties, DTCG-shaped JSON and a Tailwind @theme block. */
+  exportTokens(doc: TandemDoc) {
+    const vars = doc.variables ?? {};
+    const entries = Object.entries(vars);
+    const css = `:root {\n${entries.map(([k, v]) => `  --${k}: ${v};`).join('\n')}\n}`;
+    const json = {
+      [doc.name]: Object.fromEntries(entries.map(([k, v]) => [k, { $value: v, $type: typeof v === 'number' ? 'number' : 'color' }])),
+    };
+    const tailwind = `@theme {\n${entries.map(([k, v]) => `  --${k}: ${v};`).join('\n')}\n}`;
+    return { css, json, tailwind };
+  }
+
+  /** Structural problems a screenshot would show but not explain. */
+  warnings(doc: TandemDoc, page: Page): string[] {
+    const out: string[] = [];
+    const { page: resolved, issues } = resolvePage(page, doc, { issues: [] });
+    out.push(...issues);
+    const boxes = layoutPage(resolved);
+    const index = new Map<string, TandemNode>();
+    const collect = (list: TandemNode[]) => { for (const n of list) { index.set(n.id, n); if (n.children) collect(n.children); } };
+    collect(resolved.children);
+    for (const [id, node] of index) {
+      const b = boxes.get(id);
+      if (!b || node.visible === false) continue;
+      if (node.type === 'text') {
+        const m = measureText(node, b.w + 1);
+        if (m.height > b.h + 1.5) out.push(`text ${id} needs ${Math.ceil(m.height)}px but its box is ${Math.round(b.h)}px high — it will be clipped`);
+        continue;
+      }
+      if (node.type !== 'frame' || node.clip === false) continue;
+      for (const k of node.children ?? []) {
+        if (k.visible === false) continue;
+        const kb = boxes.get(k.id);
+        if (!kb) continue;
+        const over = Math.max(0, kb.x + kb.w - (b.x + b.w), kb.y + kb.h - (b.y + b.h), b.x - kb.x, b.y - kb.y);
+        if (over > 1) { out.push(`frame ${id} clips ${k.id} by ${Math.round(over)}px (content exceeds the frame)`); break; }
+      }
+    }
+    return [...new Set(out)];
+  }
+
   // ---------- reading ----------
 
   outline(doc: TandemDoc, opts: { pageId?: string; nodeId?: string; depth?: number }): string {
@@ -206,7 +315,7 @@ export class Engine {
     const lines: string[] = [];
     const pages = opts.nodeId ? [this.page(doc, undefined, opts.nodeId)] : opts.pageId ? [this.page(doc, opts.pageId)] : doc.pages;
     for (const page of pages) {
-      const boxes = layoutPage(page);
+      const boxes = layoutPage(resolvePage(page, doc).page);
       lines.push(`page "${page.name}" id=${page.id}${page.background ? ` background=${page.background}` : ''}`);
       const roots = opts.nodeId ? [indexDoc(doc).get(opts.nodeId)!.node] : page.children;
       const visit = (n: TandemNode, d: number) => {
@@ -221,17 +330,17 @@ export class Engine {
     return lines.join('\n');
   }
 
-  nodeDetail(doc: TandemDoc, nodeId: string): { node: TandemNode; box: Box; parent: string; page: string } {
+  nodeDetail(doc: TandemDoc, nodeId: string): { node: TandemNode; box: Box; parent: string; page: string; computed: Record<string, string> } {
     const w = indexDoc(doc).get(nodeId);
     if (!w) throw new OpError(`node "${nodeId}" not found`);
-    const box = layoutPage(w.page).get(nodeId)!;
-    return { node: w.node, box: roundBox(box), parent: w.parent?.id ?? w.page.id, page: w.page.id };
+    const box = layoutPage(resolvePage(w.page, doc).page).get(nodeId)!;
+    return { node: w.node, box: roundBox(box), parent: w.parent?.id ?? w.page.id, page: w.page.id, computed: computedColors(doc, w.page, w.node) };
   }
 
   exportHTML(doc: TandemDoc, nodeId: string): string {
     const w = indexDoc(doc).get(nodeId);
     if (!w) throw new OpError(`node "${nodeId}" not found`);
-    const boxes = layoutPage(w.page);
+    const boxes = layoutPage(resolvePage(w.page, doc).page);
     const asset = (src: string) => (isAssetId(src) ? `${this.publicUrl}/assets/${src}` : src);
     const body = htmlNode(w.node, boxes, null, asset);
     return `<!doctype html>\n<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escHtml(w.node.name ?? w.node.id)}</title>\n<style>*{box-sizing:border-box;margin:0}body{background:${w.page.background ?? '#f5f5f5'}}</style></head>\n<body>\n${body}\n</body></html>\n`;
@@ -279,6 +388,8 @@ function describe(n: TandemNode, boxes: Boxes): string {
   let s = `${n.type} id=${n.id}`;
   if (n.name) s += ` "${n.name}"`;
   s += ` ${b.w}x${b.h} at ${b.x},${b.y}`;
+  if (n.component === true) s += ' [component]';
+  if (n.type === 'instance') s += ` component=${typeof n.component === 'string' ? n.component : '(none)'}${n.state ? ` state=${n.state}` : ''}`;
   if (n.layout && n.layout !== 'none') s += ` layout=${n.layout} gap=${n.gap ?? 0}`;
   if (n.type === 'text') s += ` ${n.fontSize ?? 16}px "${(n.text ?? '').slice(0, 60).replace(/\n/g, '⏎')}${(n.text ?? '').length > 60 ? '…' : ''}"`;
   if (typeof n.fill === 'string') s += ` fill=${n.fill}`;
@@ -344,13 +455,17 @@ function htmlNode(n: TandemNode, boxes: Boxes, parent: TandemNode | null, asset:
     if (f) css.push(f);
   }
   if (n.type === 'ellipse') css.push('border-radius:50%');
-  else if (n.radius !== undefined) css.push(`border-radius:${typeof n.radius === 'number' ? n.radius + 'px' : n.radius.map((r) => r + 'px').join(' ')}`);
+  else if (n.radius !== undefined) {
+    const rr = Array.isArray(n.radius) ? n.radius : [n.radius];
+    css.push(`border-radius:${rr.map((r) => (typeof r === 'number' ? `${r}px` : '0px')).join(' ')}`);
+  }
   if (n.stroke) css.push(`border:${n.strokeWidth ?? 1}px ${n.strokeDash?.length ? 'dashed' : 'solid'} ${n.stroke}`);
   if (n.opacity !== undefined && n.opacity < 1) css.push(`opacity:${n.opacity}`);
   if (n.rotation) css.push(`transform:rotate(${n.rotation}deg)`);
   if (n.shadows?.length) css.push(`box-shadow:${n.shadows.map((s) => `${s.inset ? 'inset ' : ''}${s.x ?? 0}px ${s.y ?? 4}px ${s.blur ?? 12}px ${s.color ?? 'rgba(0,0,0,0.15)'}`).join(',')}`);
   if (n.blur) css.push(`filter:blur(${n.blur}px)`);
-  const tag = (inner: string, el = 'div') => `<${el} data-tandem-id="${escHtml(n.id)}" style="${escHtml(css.join(';'))}">${inner}</${el}>`;
+  const a11y = `${n.role ? ` role="${escHtml(n.role)}"` : ''}${n.label ? ` aria-label="${escHtml(n.label)}"` : ''}`;
+  const tag = (inner: string, el = 'div') => `<${el} data-tandem-id="${escHtml(n.id)}"${a11y} style="${escHtml(css.join(';'))}">${inner}</${el}>`;
 
   switch (n.type) {
     case 'frame': {
@@ -375,7 +490,7 @@ function htmlNode(n: TandemNode, boxes: Boxes, parent: TandemNode | null, asset:
     }
     case 'image':
       css.push(`object-fit:${n.fit ?? 'cover'}`);
-      return `<img data-tandem-id="${escHtml(n.id)}" alt="${escHtml(n.name ?? '')}" src="${escHtml(n.src ? asset(n.src) : '')}" style="${escHtml(css.join(';'))}">`;
+      return `<img data-tandem-id="${escHtml(n.id)}" alt="${escHtml(n.alt ?? n.name ?? '')}" src="${escHtml(n.src ? asset(n.src) : '')}" style="${escHtml(css.join(';'))}">`;
     case 'svg': {
       let markup = n.svg ?? '';
       if (n.color) markup = markup.replace(/currentColor/g, n.color);
@@ -389,4 +504,59 @@ function htmlNode(n: TandemNode, boxes: Boxes, parent: TandemNode | null, asset:
     default:
       return tag('');
   }
+}
+
+// ---------- computed colours ----------
+
+/** Fills behind a node: page background, then every ancestor's solid fill, composited in order. */
+/** A "var:name" reference resolved against the document, or the value itself. */
+function varLookup(doc: TandemDoc, value: unknown): unknown {
+  if (typeof value !== 'string') return value;
+  const m = /^var:([A-Za-z][\w-]*)$/.exec(value);
+  return m ? (doc.variables?.[m[1]] ?? value) : value;
+}
+
+function backdropOf(doc: TandemDoc, page: Page, nodeId: string): string | null {
+  const idx = indexDoc(doc);
+  const chain: TandemNode[] = [];
+  for (let w = idx.get(nodeId)?.parent; w; w = idx.get(w.id)?.parent) chain.unshift(w);
+  let acc = page.background ?? '#ffffff';
+  for (const n of chain) {
+    const f = varLookup(doc, n.fill);
+    if (typeof f === 'string') acc = flattenOver(f, acc);
+  }
+  return acc;
+}
+
+/** Alpha-resolved colours for a node, so exports and reviews can see the flat value. */
+function computedColors(doc: TandemDoc, page: Page, node: TandemNode): Record<string, string> {
+  const bg = backdropOf(doc, page, node.id) ?? page.background ?? '#ffffff';
+  const out: Record<string, string> = {};
+  const fill = varLookup(doc, node.fill);
+  const color = varLookup(doc, node.color);
+  const stroke = varLookup(doc, node.stroke);
+  const outline = varLookup(doc, node.outline?.color);
+  if (typeof fill === 'string') out.fill = flattenOver(fill, bg);
+  if (typeof color === 'string') out.color = flattenOver(color, bg);
+  if (typeof stroke === 'string') out.stroke = flattenOver(stroke, bg);
+  if (typeof outline === 'string') out.outline = flattenOver(outline, bg);
+  const shadows = (node.shadows ?? []).map((s) => { const c = varLookup(doc, s.color); return typeof c === 'string' ? flattenOver(c, bg) : null; }).filter(Boolean);
+  if (shadows.length) out.shadows = shadows.join(', ');
+  return out;
+}
+
+/** The document token closest to the failing colour that would pass the contrast requirement. */
+function suggestToken(doc: TandemDoc, fg: { r: number; g: number; b: number; a: number }, bg: { r: number; g: number; b: number; a: number }, need: number): string {
+  const want = luminance(fg);
+  let best: { name: string; ratio: number; delta: number } | null = null;
+  for (const [name, value] of Object.entries(doc.variables ?? {})) {
+    if (typeof value !== 'string') continue;
+    const c = parseColor(value);
+    if (!c) continue;
+    const ratio = contrastRatio(c, bg);
+    if (ratio + 0.005 < need) continue;
+    const delta = Math.abs(luminance(c) - want);
+    if (!best || delta < best.delta) best = { name, ratio, delta };
+  }
+  return best ? ` — try var:${best.name} (${best.ratio.toFixed(2)}:1)` : '';
 }

@@ -20,11 +20,14 @@ function spec(n: TandemNode, axis: 'width' | 'height'): Size {
   return 100;
 }
 
+/** Numeric coercion: variables are already resolved by the time layout runs, this just satisfies the types. */
+const num = (v: unknown, fallback = 0): number => typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+
 export function padding(n: TandemNode): [number, number, number, number] {
   const p = n.padding ?? 0;
-  if (typeof p === 'number') return [p, p, p, p];
-  if (p.length === 2) return [p[0], p[1], p[0], p[1]];
-  return p;
+  if (!Array.isArray(p)) { const v = num(p); return [v, v, v, v]; }
+  if (p.length === 2) return [num(p[0]), num(p[1]), num(p[0]), num(p[1])];
+  return [num(p[0]), num(p[1]), num(p[2]), num(p[3])];
 }
 
 function inFlow(k: TandemNode): boolean {
@@ -66,7 +69,7 @@ export function measure(n: TandemNode, forcedW?: number, forcedH?: number): Sz {
     const innerCross = row ? (h !== undefined ? h - pt - pb : undefined) : (w !== undefined ? w - pl - pr : undefined);
     const innerMain = row ? (w !== undefined ? w - pl - pr : undefined) : (h !== undefined ? h - pt - pb : undefined);
     const kids = (n.children ?? []).filter(inFlow);
-    const gaps = (n.gap ?? 0) * Math.max(0, kids.length - 1);
+    const gaps = num(n.gap) * Math.max(0, kids.length - 1);
     const sizes = kids.map((k) => measureChild(n, k, row, innerCross));
     const isFill = kids.map((k) => spec(k, row ? 'width' : 'height') === 'fill');
     // with the main size known, "fill" children get their final size, which can change their cross size (text wrap)
@@ -139,7 +142,7 @@ function place(n: TandemNode, x: number, y: number, w: number, h: number, boxes:
   const innerH = Math.max(0, h - pt - pb);
   const innerMain = row ? innerW : innerH;
   const innerCross = row ? innerH : innerW;
-  const gap = n.gap ?? 0;
+  const gap = num(n.gap);
   const kids = n.children.filter(inFlow);
 
   const cross: number[] = [];

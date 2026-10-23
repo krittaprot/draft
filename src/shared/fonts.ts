@@ -57,7 +57,8 @@ export function advance(f: FontFace, cp: number): number | null {
       return v ? v / f.upem : null;
     }
   }
-  return null;
+  const sym = f.sym?.[cp];
+  return sym ? sym / f.upem : null;
 }
 
 /** Average letter width in em units — the fallback for characters outside the stored ranges. */
@@ -150,11 +151,24 @@ export function faceFor(name: string | undefined, weight = 400, italic = false):
   return byKey.get(`${fam.name}/${matchWeight(fam.weights, weight)}/normal`);
 }
 
-/** Copy for CSS/SVG font-family: bundled families are quoted, anything else is left as the author wrote it. */
-export function cssFamily(name: string | undefined): string {
+/** Families every text run falls back through when the primary face has no glyph (⌘, Thai, symbols). */
+export const FALLBACK_FAMILIES = ['Inter', 'Noto Sans', 'Geist'];
+
+/**
+ * CSS/SVG font-family for a run: the requested family, the bundled fallbacks, then a generic. The
+ * measurement code walks the same list per character, so a ⌘ in Geist Mono is measured with — and drawn
+ * by — Inter instead of being clipped.
+ */
+export function fontStack(name: string | undefined): string {
   const fam = familyInfo(name);
-  return fam ? `"${fam.name}"` : (name ?? '');
+  if (!fam) return name ?? '';
+  const generic = fam.category === 'mono' ? 'monospace' : fam.category === 'serif' ? 'serif' : 'sans-serif';
+  const extra = FALLBACK_FAMILIES.filter((f) => f !== fam.name).map((f) => `"${f}"`);
+  return [`"${fam.name}"`, ...extra, generic].join(', ');
 }
+
+/** Kept for callers that only want the family expression. */
+export const cssFamily = fontStack;
 
 /** Human/agent readable inventory, one line per family. */
 export function fontInventory(): string {

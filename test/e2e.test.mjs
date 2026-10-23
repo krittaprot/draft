@@ -340,3 +340,74 @@ test('weight matching follows CSS, and italics without a face are reported', asy
   assert.match(textOf(mono), /no italic face for Manrope/);
   await c.close();
 });
+
+test('variables, components, states and bulk edits compose the way the docs say', async () => {
+  const c = await connect(owner);
+  const doc = /d_[a-z0-9]+/.exec(textOf(await call(c, 'create_document', { name: 'System' })))[0];
+  await call(c, 'manage_variables', { document: doc, set: { paper: '#faf6ef', ink: '#1d1a15' } });
+
+  await call(c, 'create_nodes', {
+    document: doc,
+    nodes: [{
+      type: 'frame', id: 'btn', component: true, width: 'hug', height: 'hug', layout: 'row', padding: [8, 12], gap: 6, fill: 'var:ink',
+      children: [{ type: 'text', id: 'btn-label', text: 'Save', fontSize: 14, color: '#ffffff' }],
+      states: { hover: { 'btn-label': { color: 'var:paper' }, '@root': { fill: '#2a261f' } } },
+    }],
+  });
+  await call(c, 'create_nodes', {
+    document: doc,
+    nodes: [
+      { type: 'instance', id: 'b1', component: 'btn', overrides: { 'btn-label': { text: 'Publish' } } },
+      { type: 'instance', id: 'b2', component: 'btn', state: 'hover' },
+    ],
+  });
+
+  const svg = async (node) => textOf(await call(c, 'export', { document: doc, node, format: 'svg' }));
+  assert.match(await svg('b1'), /Publish/, 'override replaces the component text');
+  assert.match(await svg('b2'), /#faf6ef/, 'hover state uses the paper token');
+
+  // an instance can switch state without touching the definition
+  await call(c, 'update_nodes', { document: doc, updates: [{ id: 'b1', props: { state: 'hover' } }] });
+  assert.match(await svg('b1'), /#2a261f/, 'instance picked the hover patch');
+  await call(c, 'update_nodes', { document: doc, updates: [{ id: 'b1', props: { state: 'default' } }] });
+
+  // editing the definition reaches every instance
+  await call(c, 'update_nodes', { document: doc, updates: [{ id: 'btn-label', props: { text: 'Save changes' } }] });
+  assert.match(await svg('b2'), /Save changes/);
+
+  // tokens propagate without touching nodes
+  await call(c, 'manage_variables', { document: doc, set: { paper: '#f2ece1' } });
+  assert.match(await svg('b2'), /#f2ece1/);
+  const tokens = textOf(await call(c, 'export_tokens', { document: doc }));
+  assert.match(tokens, /--paper: #f2ece1;/);
+  assert.match(tokens, /"\$value": "#f2ece1"/);
+
+  // predicate edits and queries
+  const found = textOf(await call(c, 'find_nodes', { document: doc, where: { type: 'text', text: { contains: 'changes' } } }));
+  assert.match(found, /btn-label/);
+  const bulk = textOf(await call(c, 'update_nodes', { document: doc, where: { fontSize: 14 }, props: { fontSize: 16 } }));
+  assert.match(bulk, /updated 1 node/, 'one definition node matched');
+
+  // dry runs report problems and never write
+  const revBefore = Number(/rev (\d+)/.exec(textOf(await call(c, 'get_document', { document: doc })))[1]);
+  const dry = textOf(await call(c, 'create_nodes', { document: doc, dry_run: true, nodes: [{ type: 'text', text: 'x', strokeWidth: null }] }));
+  assert.match(dry, /would fail/);
+  assert.match(dry, /strokeWidth/);
+  const revAfter = Number(/rev (\d+)/.exec(textOf(await call(c, 'get_document', { document: doc })))[1]);
+  assert.equal(revAfter, revBefore, 'a dry run does not create a revision');
+
+  // contrast is checked against the real backdrop
+  await call(c, 'create_nodes', { document: doc, nodes: [{
+    type: 'frame', id: 'card', width: 240, height: 'hug', layout: 'column', padding: 12, fill: '#f1ede6',
+    children: [{ type: 'text', id: 'muted', text: 'Low contrast sample', fontSize: 12, color: '#cfc9bd' }],
+  }] });
+  const audit = textOf(await call(c, 'audit_contrast', { document: doc }));
+  assert.match(audit, /muted/);
+  assert.match(audit, /1\.4\d:1/);
+  assert.match(audit, /needs 4\.5:1/);
+
+  // truncation ends the visible text with an ellipsis
+  await call(c, 'create_nodes', { document: doc, nodes: [{ type: 'text', id: 'tip', text: 'A tooltip that is far too long for the space it was given', width: 90, wrap: 'truncate', fontSize: 13 }] });
+  assert.match(await svg('tip'), /…/);
+  await c.close();
+});

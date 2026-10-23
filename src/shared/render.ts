@@ -3,7 +3,7 @@
 import { DEFAULT_FONT, type Box, type TandemNode, type Fill, type Page } from './model.ts';
 import { layoutPage, unionBox, type Boxes } from './layout.ts';
 import { measureText, textStyle, baselineOffset } from './text.ts';
-import { cssFamily } from './fonts.ts';
+import { fontStack } from './fonts.ts';
 
 export interface RenderOptions {
   /** Maps an image src (asset id, data URL) to an href usable in this context, or null if unavailable. */
@@ -14,6 +14,7 @@ export interface RenderOptions {
 
 const esc = (s: string | number) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 const r2 = (v: number) => Math.round(v * 100) / 100;
+const numOf = (v: unknown, fallback = 0): number => typeof v === 'number' && Number.isFinite(v) ? v : fallback;
 
 function b64(s: string): string {
   const g = globalThis as { Buffer?: { from(s: string, e: string): { toString(e: string): string } } };
@@ -49,15 +50,15 @@ function fills(n: TandemNode, fallback?: string): Fill[] {
   return Array.isArray(n.fill) ? n.fill : [n.fill];
 }
 
-function shapePath(n: TandemNode, b: Box): { tag: string; attrs: string } {
-  if (n.type === 'ellipse') return { tag: 'ellipse', attrs: `cx="${r2(b.x + b.w / 2)}" cy="${r2(b.y + b.h / 2)}" rx="${r2(b.w / 2)}" ry="${r2(b.h / 2)}"` };
+function shapePath(n: TandemNode, b: Box, grow = 0): { tag: string; attrs: string } {
+  if (n.type === 'ellipse') return { tag: 'ellipse', attrs: `cx="${r2(b.x + b.w / 2)}" cy="${r2(b.y + b.h / 2)}" rx="${r2(Math.max(0, b.w / 2 + grow))}" ry="${r2(Math.max(0, b.h / 2 + grow))}"` };
   const r = n.radius ?? 0;
-  if (typeof r === 'number') {
-    const rr = Math.min(r, b.w / 2, b.h / 2);
+  if (!Array.isArray(r)) {
+    const rr = Math.max(0, Math.min(numOf(r) + grow, b.w / 2 + grow, b.h / 2 + grow));
     return { tag: 'rect', attrs: `x="${r2(b.x)}" y="${r2(b.y)}" width="${r2(b.w)}" height="${r2(b.h)}"${rr ? ` rx="${r2(rr)}"` : ''}` };
   }
   const m = Math.min(b.w / 2, b.h / 2);
-  const [tl, tr, br, bl] = r.map((v) => Math.min(v, m));
+  const [tl, tr, br, bl] = r.map((v) => Math.max(0, Math.min(numOf(v) + grow, m + grow)));
   const { x, y, w, h } = b;
   const d = `M${r2(x + tl)},${r2(y)}H${r2(x + w - tr)}A${tr},${tr} 0 0 1 ${r2(x + w)},${r2(y + tr)}V${r2(y + h - br)}A${br},${br} 0 0 1 ${r2(x + w - br)},${r2(y + h)}H${r2(x + bl)}A${bl},${bl} 0 0 1 ${r2(x)},${r2(y + h - bl)}V${r2(y + tl)}A${tl},${tl} 0 0 1 ${r2(x + tl)},${r2(y)}Z`;
   return { tag: 'path', attrs: `d="${d}"` };
@@ -65,9 +66,41 @@ function shapePath(n: TandemNode, b: Box): { tag: string; attrs: string } {
 
 function strokeAttrs(n: TandemNode): string {
   if (!n.stroke) return '';
-  let s = ` stroke="${esc(n.stroke)}" stroke-width="${n.strokeWidth ?? 1}"`;
+  let s = ` stroke="${esc(n.stroke)}" stroke-width="${numOf(n.strokeWidth, 1)}"`;
   if (n.strokeDash?.length) s += ` stroke-dasharray="${n.strokeDash.join(' ')}"`;
   return s;
+}
+
+/** Border drawn on the inside of the box (so a 2px error border never changes the component's width). */
+function strokeMarkup(ctx: Ctx, n: TandemNode, b: Box): string {
+  if (!n.stroke) return '';
+  const sw = numOf(n.strokeWidth, 1);
+  const dash = n.strokeDash?.length ? ` stroke-dasharray="${n.strokeDash.join(' ')}"` : '';
+  if ((n.strokeAlign ?? 'center') === 'inner') {
+    const { tag, attrs } = shapePath(n, b);
+    const id = ctx.uid('c');
+    ctx.defs.push(`<clipPath id="${id}"><${tag} ${attrs}/></clipPath>`);
+    // a centred stroke twice as wide, clipped to the shape, leaves exactly `sw` inside
+    return `<g clip-path="url(#${id})"><${tag} ${attrs} fill="none" stroke="${esc(n.stroke)}" stroke-width="${r2(sw * 2)}"${dash}/></g>`;
+  }
+  const grow = (n.strokeAlign ?? 'center') === 'outer' ? sw / 2 : 0;
+  const { tag, attrs } = shapePath(n, expandBox(b, grow), grow);
+  return `<${tag} ${attrs} fill="none" stroke="${esc(n.stroke)}" stroke-width="${r2(sw)}"${dash}/>`;
+}
+
+/** Figma-style ring outside the box: does not affect layout or the node's measured size. */
+function outlineMarkup(ctx: Ctx, n: TandemNode, b: Box): string {
+  const o = n.outline;
+  if (!o) return '';
+  const width = o.width ?? 2;
+  const grow = (o.offset ?? 0) + width / 2;
+  const { tag, attrs } = shapePath(n, expandBox(b, grow), grow);
+  const dash = o.dash?.length ? ` stroke-dasharray="${o.dash.join(' ')}"` : '';
+  return `<${tag} ${attrs} fill="none" stroke="${esc(o.color ?? '#2563eb')}" stroke-width="${r2(width)}"${dash}/>`;
+}
+
+function expandBox(b: Box, by: number): Box {
+  return { x: b.x - by, y: b.y - by, w: b.w + by * 2, h: b.h + by * 2 };
 }
 
 function shadowFilter(ctx: Ctx, n: TandemNode): string {
@@ -91,7 +124,7 @@ function renderNode(ctx: Ctx, n: TandemNode): string {
   const b = ctx.boxes.get(n.id);
   if (!b) return '';
   const attrs: string[] = [];
-  if (ctx.opts.ids) attrs.push(`data-id="${esc(n.id)}"`);
+  if (ctx.opts.ids && !n.id.includes('~')) attrs.push(`data-id="${esc(n.id)}"`);
   if (n.opacity !== undefined && n.opacity < 1) attrs.push(`opacity="${n.opacity}"`);
   if (n.rotation) attrs.push(`transform="rotate(${n.rotation} ${r2(b.x + b.w / 2)} ${r2(b.y + b.h / 2)})"`);
   let inner = '';
@@ -105,9 +138,10 @@ function renderNode(ctx: Ctx, n: TandemNode): string {
       const filter = shadowFilter(ctx, n);
       if (!fl.length && (n.stroke || filter)) fl.push('none');
       fl.forEach((f, i) => {
-        const last = i === fl.length - 1;
-        inner += `<${tag} ${geo} fill="${f === 'none' ? 'none' : paint(ctx, f)}"${last ? strokeAttrs(n) : ''}${i === 0 ? filter : ''}/>`;
+        inner += `<${tag} ${geo} fill="${f === 'none' ? 'none' : paint(ctx, f)}"${i === 0 ? filter : ''}/>`;
       });
+      inner += strokeMarkup(ctx, n, b);
+      inner += outlineMarkup(ctx, n, b);
       for (const s of (n.shadows ?? []).filter((s) => s.inset)) {
         const id = ctx.uid('c');
         ctx.defs.push(`<clipPath id="${id}"><${tag} ${geo}/></clipPath>`);
@@ -129,7 +163,7 @@ function renderNode(ctx: Ctx, n: TandemNode): string {
       const anchor = n.textAlign === 'center' ? 'middle' : n.textAlign === 'right' ? 'end' : 'start';
       const tx = n.textAlign === 'center' ? b.x + b.w / 2 : n.textAlign === 'right' ? b.x + b.w : b.x;
       const color = n.color ?? (typeof n.fill === 'string' ? n.fill : '#111111');
-      let t = `<text font-family="${esc(cssFamily(n.fontFamily ?? DEFAULT_FONT))}" font-size="${st.fontSize}" font-weight="${st.fontWeight}" fill="${esc(color)}" text-anchor="${anchor}" xml:space="preserve" style="font-synthesis:none"`;
+      let t = `<text font-family="${esc(fontStack(n.fontFamily ?? DEFAULT_FONT))}" font-size="${st.fontSize}" font-weight="${st.fontWeight}" fill="${esc(color)}" text-anchor="${anchor}" xml:space="preserve" style="font-synthesis:none"`;
       if (n.italic) t += ' font-style="italic"';
       if (st.letterSpacing) t += ` letter-spacing="${st.letterSpacing}"`;
       if (n.textDecoration && n.textDecoration !== 'none') t += ` text-decoration="${n.textDecoration}"`;

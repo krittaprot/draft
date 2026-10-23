@@ -1,6 +1,7 @@
 // Tandem browser editor: infinite canvas, layers, inspector, comments, history and live agent activity.
 import { indexDoc, type Box, type TandemDoc, type TandemNode, type Page } from '../shared/model.ts';
 import { renderPage } from '../shared/render.ts';
+import { resolvePage } from '../shared/resolve.ts';
 import { isAuto, type Boxes } from '../shared/layout.ts';
 import { FAMILIES, familyInfo, matchWeight, normalizeFamily } from '../shared/fonts.ts';
 
@@ -146,7 +147,7 @@ function drawCanvas() {
   const pg = page();
   const world = $('#world');
   if (!pg) { world.innerHTML = ''; return; }
-  const r = renderPage(pg, { assetHref, ids: true });
+  const r = renderPage(resolvePage(pg, S.doc!).page, { assetHref, ids: true });
   S.boxes = r.boxes;
   world.innerHTML = `<defs>${r.defs}</defs>${r.body}`;
   ($('#empty') as HTMLElement).hidden = pg.children.length > 0;
@@ -345,6 +346,14 @@ function designPanel(): string {
       <div class="seg">${['left', 'center', 'right'].map((a) => `<button data-set-align="${a}" class="${(n.textAlign ?? 'left') === a ? 'on' : ''}">${a}</button>`).join('')}</div>
       ${colorField('color', 'Color', n.color ?? '#111111', false)}
       <label class="check${fam && !fam.italics.length ? ' disabled' : ''}"${fam && !fam.italics.length ? ' title="This family has no italic face. Pick a family with italics, or leave italic off."' : ''}><input type="checkbox" data-prop="italic" data-kind="bool" ${n.italic ? 'checked' : ''}${fam && !fam.italics.length ? ' disabled' : ''}> Italic</label></div>`;
+  }
+  if (n.type === 'instance') {
+    const comp = S.doc ? indexDoc(S.doc).get(String(n.component ?? ''))?.node : undefined;
+    const states = ['default', ...Object.keys(comp?.states ?? {})];
+    const ov = Object.keys(n.overrides ?? {}).length;
+    h += `<div class="insp"><h3>Instance</h3><div class="meta">component ${esc(String(n.component ?? '—'))}</div>
+      ${sel('state', 'State', n.state ?? 'default', states)}
+      <div class="meta">${ov} override${ov === 1 ? '' : 's'} · edit the component to change every instance</div></div>`;
   }
   if (n.type === 'image') {
     h += `<div class="insp"><h3>Image</h3>${sel('fit', 'Fit', n.fit ?? 'cover', ['cover', 'contain', 'fill'])}

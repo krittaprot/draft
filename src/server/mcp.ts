@@ -4,6 +4,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import { MODEL_GUIDE, newId } from '../shared/model.ts';
 import { fontInventory } from '../shared/fonts.ts';
+import type { Predicate } from '../shared/predicate.ts';
 import type { Engine } from './engine.ts';
 import type { Principal } from './auth.ts';
 import type { Op } from './ops.ts';
@@ -21,12 +22,14 @@ Workflow:
 5. Before revising an existing design, call list_comments: people pin feedback to nodes. Reply with reply_comment and resolve_comment once addressed.
 6. Every change becomes a revision with your name; write a short message describing it. get_history and restore_revision undo mistakes.
 7. Typography: call list_fonts once and pick a family from it — those files ship with Draft, are measured with real metrics and render identically in the PNG and the browser. Unknown families silently fall back to Helvetica.
+8. Before building screens, define the system: manage_variables for colours and spacing, and component:true frames for anything repeated (sidebar, row, button, toast). Then compose with instances and overrides instead of rebuilding trees. update_nodes on the definition cascades to every instance; update_nodes({where}) and find_nodes replace tree-walking; dry_run checks a batch before it writes; audit_contrast checks text against its real backdrop.
 
 ${MODEL_GUIDE}`;
 
 const text = (s: string): CallToolResult => ({ content: [{ type: 'text', text: s }] });
 const fail = (e: unknown): CallToolResult => ({ isError: true, content: [{ type: 'text', text: e instanceof Error ? e.message : String(e) }] });
 /** Font problems do not fail the edit, but the agent must know the design is not rendering as asked. */
+const warningBlock = (r: { warnings?: string[] }): string => r.warnings?.length ? `\nwarnings:\n${r.warnings.join('\n')}` : '';
 const fontWarning = (issues: string[]): string => issues.length
   ? `\n\n⚠ ${issues.join('\n⚠ ')}\nCall list_fonts for families that ship with Draft.`
   : '';
@@ -133,11 +136,19 @@ export function buildMcpServer(engine: Engine, who: Principal): McpServer {
       index: z.number().int().min(0).optional().describe('position among the parent\'s children (default: end, i.e. on top)'),
       nodes: z.array(z.record(z.string(), z.any())).min(1).max(200).describe(nodesDesc),
       message: messageArg, preview: previewArg,
+      dry_run: z.boolean().optional().describe('validate and lay out without saving anything'),
+      atomic: z.boolean().optional().describe('default true: one invalid node aborts the batch. false keeps the valid ones and reports the rest'),
     },
-  }, writer(async (a: { document: string; parent?: string; index?: number; nodes: Record<string, unknown>[]; message?: string; preview?: boolean }) => {
+  }, writer(async (a: { document: string; parent?: string; index?: number; nodes: Record<string, unknown>[]; message?: string; preview?: boolean; dry_run?: boolean; atomic?: boolean }) => {
     const ops: Op[] = a.nodes.map((node, i) => ({ op: 'create', parent: a.parent, index: a.index === undefined ? undefined : a.index + i, node }));
-    const r = await engine.apply(a.document, ops, who.name, a.message ?? `Added ${a.nodes.length} node${a.nodes.length > 1 ? 's' : ''}`);
-    const res = text(`rev ${r.rev}: created ${r.created.length} nodes: ${r.created.join(', ')}\n\n` + engine.outline(store.getDoc(a.document), { nodeId: r.created[0], depth: 3 }) + fontWarning(r.fontIssues));
+    if (a.dry_run) {
+      const v = engine.validateOps(a.document, ops);
+      return text(`dry run: ${v.ok ? 'would succeed' : 'would fail'}\n${v.errors.length ? `errors:\n${v.errors.join('\n')}\n` : ''}${v.ok ? `would create ${v.wouldCreate} nodes` : ''}${v.warnings.length ? `\nwarnings:\n${v.warnings.join('\n')}` : ''}`);
+    }
+    const r = await engine.apply(a.document, ops, who.name, a.message ?? `Added ${a.nodes.length} node${a.nodes.length > 1 ? 's' : ''}`, { atomic: a.atomic });
+    const head = `rev ${r.rev}: created ${r.created.length} nodes: ${r.created.join(', ')}`;
+    const tail = `${r.errors.length ? `\nfailed:\n${r.errors.join('\n')}` : ''}${warningBlock(r)}${fontWarning(r.fontIssues)}`;
+    const res = text(head + (r.created.length ? `\n\n` + engine.outline(store.getDoc(a.document), { nodeId: r.created[0], depth: 3 }) : '') + tail);
     return a.preview ? withPreview(res, a.document, r.created) : res;
   }));
 
@@ -149,14 +160,29 @@ export function buildMcpServer(engine: Engine, who: Principal): McpServer {
         id: z.string(),
         props: z.record(z.string(), z.any()).optional().describe('properties to set'),
         unset: z.array(z.string()).optional().describe('properties to remove'),
-      })).min(1).max(500),
+      })).min(1).max(500).optional(),
+      where: z.record(z.string(), z.any()).optional().describe('bulk edit: match nodes by property, e.g. {fill:"#c0baac"} or {text:{contains:"⌘"}, fontSize:{lt:12}}. Goes with props/unset'),
+      props: z.record(z.string(), z.any()).optional().describe('properties to set on every match (with where)'),
+      unset: z.array(z.string()).optional().describe('properties to remove from every match (with where)'),
+      page: z.string().optional().describe('limit a where edit to one page'),
+      dry_run: z.boolean().optional().describe('report how many nodes would change, without saving'),
+      atomic: z.boolean().optional(),
       message: messageArg, preview: previewArg,
     },
-  }, writer(async (a: { document: string; updates: { id: string; props?: Record<string, unknown>; unset?: string[] }[]; message?: string; preview?: boolean }) => {
-    const ops: Op[] = a.updates.map((u) => ({ op: 'update', id: u.id, props: u.props, unset: u.unset }));
-    const r = await engine.apply(a.document, ops, who.name, a.message ?? `Updated ${a.updates.length} node${a.updates.length > 1 ? 's' : ''}`);
-    const res = text(`rev ${r.rev}: updated ${a.updates.map((u) => u.id).join(', ')}` + fontWarning(r.fontIssues));
-    return a.preview ? withPreview(res, a.document, a.updates.map((u) => u.id)) : res;
+  }, writer(async (a: { document: string; updates?: { id: string; props?: Record<string, unknown>; unset?: string[] }[]; where?: Record<string, unknown>; props?: Record<string, unknown>; unset?: string[]; page?: string; dry_run?: boolean; atomic?: boolean; message?: string; preview?: boolean }) => {
+    if (!!a.updates === !!a.where) throw new Error('give either updates (by id) or where (bulk match)');
+    const ops: Op[] = a.where
+      ? [{ op: 'update_where', where: a.where as Predicate, props: a.props, unset: a.unset, page: a.page }]
+      : a.updates!.map((u) => ({ op: 'update', id: u.id, props: u.props, unset: u.unset }));
+    if (a.dry_run) {
+      const v = engine.validateOps(a.document, ops);
+      return text(`dry run: ${v.ok ? 'would succeed' : 'would fail'}${v.ok ? `, would change ${v.wouldChange} nodes` : ''}\n${v.errors.length ? `errors:\n${v.errors.join('\n')}\n` : ''}${v.warnings.length ? `warnings:\n${v.warnings.join('\n')}` : ''}`);
+    }
+    const r = await engine.apply(a.document, ops, who.name, a.message ?? (a.where ? 'Bulk update' : `Updated ${a.updates!.length} node${a.updates!.length > 1 ? 's' : ''}`), { atomic: a.atomic });
+    const ids = a.where ? r.changed : a.updates!.map((u) => u.id);
+    const res = text(`rev ${r.rev}: updated ${ids.length} node${ids.length === 1 ? '' : 's'}${a.where ? ` matching ${JSON.stringify(a.where)}` : `: ${ids.join(', ')}`}`
+      + [r.errors.length ? `\nfailed:\n${r.errors.join('\n')}` : '', warningBlock(r), fontWarning(r.fontIssues)].join(''));
+    return a.preview ? withPreview(res, a.document, ids) : res;
   }));
 
   server.registerTool('delete_nodes', {
@@ -213,15 +239,16 @@ export function buildMcpServer(engine: Engine, who: Principal): McpServer {
       max_side: z.number().int().min(100).max(4000).optional().describe('longest side in pixels (default 1600, capped at 2x scale)'),
       scale: z.number().min(0.05).max(4).optional().describe('exact scale instead of max_side'),
       revision: z.number().int().min(0).optional().describe('capture an earlier revision, e.g. to compare before/after'),
+      state: z.string().max(40).optional().describe('preview one state of a component, e.g. "hover" — does not change the document'),
     }, annotations: { readOnlyHint: true },
-  }, reader((a: { document: string; node?: string; page?: string; max_side?: number; scale?: number; revision?: number }) => {
+  }, reader((a: { document: string; node?: string; page?: string; max_side?: number; scale?: number; revision?: number; state?: string }) => {
     const doc = engine.getDoc(a.document, a.revision);
-    const shot = engine.renderPNG(doc, { nodeId: a.node, pageId: a.page, maxSide: a.max_side, scale: a.scale });
+    const shot = engine.renderPNG(doc, { nodeId: a.node, pageId: a.page, maxSide: a.max_side, scale: a.scale, states: a.state && a.node ? { [a.node]: a.state } : undefined });
     const target = a.node ?? `page:${engine.page(doc, a.page).id}`;
     return {
       content: [
         { type: 'image', data: shot.png.toString('base64'), mimeType: 'image/png' },
-        { type: 'text', text: `${a.node ?? 'page'} at rev ${doc.rev}: ${Math.round(shot.box.w)}x${Math.round(shot.box.h)} design px, image ${shot.width}x${shot.height}.\nShare link (PNG): ${engine.screenshotLink(doc.id, doc.rev, target)}\nEditor: ${engine.editorLink(doc.id, a.node)}` },
+        { type: 'text', text: `${a.node ?? 'page'}${a.state ? ` [${a.state}]` : ''} at rev ${doc.rev}: ${Math.round(shot.box.w)}x${Math.round(shot.box.h)} design px, image ${shot.width}x${shot.height}.\nShare link (PNG): ${engine.screenshotLink(doc.id, doc.rev, target)}\nEditor: ${engine.editorLink(doc.id, a.node)}${shot.issues.length ? `\n⚠ ${shot.issues.join('\n⚠ ')}` : ''}` },
       ],
     };
   }));
@@ -233,6 +260,53 @@ export function buildMcpServer(engine: Engine, who: Principal): McpServer {
   }, reader((a: { document: string; node: string; format: 'html' | 'svg' }) => {
     const doc = store.getDoc(a.document);
     return text(a.format === 'html' ? engine.exportHTML(doc, a.node) : engine.renderSVG(doc, { nodeId: a.node }).svg);
+  }));
+
+  server.registerTool('find_nodes', {
+    title: 'Find nodes', description: 'Finds nodes by property instead of id: {fill:"#c0baac"}, {text:{contains:"⌘"}}, {fontSize:{lt:12}}, {type:"text", fontFamily:"Geist Mono"}. Use it to fix one node without reading whole trees.',
+    inputSchema: {
+      document: docArg,
+      where: z.record(z.string(), z.any()).describe('properties to match: a value (equality or array membership) or {equals, contains, startsWith, regex, lt, lte, gt, gte, in, exists}'),
+      page: z.string().optional(), limit: z.number().int().min(1).max(500).optional(),
+    }, annotations: { readOnlyHint: true },
+  }, reader((a: { document: string; where: Record<string, unknown>; page?: string; limit?: number }) => {
+    const r = engine.find(store.getDoc(a.document), a.where as Predicate, a.page, a.limit ?? 50);
+    if (!r.total) return text(`no nodes match ${r.describe}`);
+    return text(`${r.total} match${r.total === 1 ? '' : 'es'} for ${r.describe}${r.total > r.lines.length ? ` (showing ${r.lines.length})` : ''}\n${r.lines.join('\n')}`);
+  }));
+
+  server.registerTool('manage_variables', {
+    title: 'Variables', description: 'Sets or removes document design tokens ({paper:"#faf6ef", space:8}), referenced from props as "var:paper" or "var:space". Changing a token updates every node that uses it, including colour, stroke, text colour, radius, gap, padding, strokeWidth, shadow and outline colours.',
+    inputSchema: {
+      document: docArg,
+      set: z.record(z.string(), z.union([z.string(), z.number()])).optional().describe('tokens to add or replace'),
+      unset: z.array(z.string()).optional().describe('token names to remove'),
+      message: messageArg,
+    },
+  }, writer(async (a: { document: string; set?: Record<string, string | number>; unset?: string[]; message?: string }) => {
+    if (!a.set && !a.unset?.length) throw new Error('give set and/or unset');
+    await engine.apply(a.document, [{ op: 'set_variables', set: a.set, unset: a.unset }], who.name, a.message ?? 'Updated variables');
+    const vars = store.getDoc(a.document).variables ?? {};
+    return text(`variables (${Object.keys(vars).length}):\n${Object.entries(vars).map(([k, v]) => `  ${k} = ${v}`).join('\n') || '  (none)'}`);
+  }));
+
+  server.registerTool('export_tokens', {
+    title: 'Export tokens', description: 'Exports the document variables as CSS custom properties, a DTCG-style JSON object and a Tailwind @theme block.',
+    inputSchema: { document: docArg },
+    annotations: { readOnlyHint: true },
+  }, reader((a: { document: string }) => {
+    const t = engine.exportTokens(store.getDoc(a.document));
+    return text(`CSS\n${t.css}\n\nJSON\n${JSON.stringify(t.json, null, 2)}\n\nTailwind\n${t.tailwind}`);
+  }));
+
+  server.registerTool('audit_contrast', {
+    title: 'Audit contrast', description: 'Checks every text node against the colour actually behind it (including alpha layers) and reports the WCAG ratio, with the closest passing token from the document where there is one.',
+    inputSchema: { document: docArg, page: z.string().optional() },
+    annotations: { readOnlyHint: true },
+  }, reader((a: { document: string; page?: string }) => {
+    const rows = engine.auditContrast(store.getDoc(a.document), a.page);
+    if (!rows.length) return text('All text passes WCAG AA against its backdrop.');
+    return text(`${rows.length} contrast failure${rows.length === 1 ? '' : 's'}:\n${rows.join('\n')}`);
   }));
 
   server.registerTool('upload_image', {

@@ -1,8 +1,8 @@
 // Text measurement shared by the server (PNG screenshots) and the browser editor, so both wrap text
-// identically. For the bundled families this reads the real advance widths of the face that will be
-// drawn (see shared/fonts.ts); unknown families fall back to Helvetica metrics.
+// identically. Measurement walks the same per-glyph fallback chain the renderer emits, so a character the
+// primary family lacks is measured with the face that will actually draw it.
 import type { TandemNode } from './model.ts';
-import { advance, averageWidth, faceFor } from './fonts.ts';
+import { advance, averageWidth, faceFor, FALLBACK_FAMILIES, type FontFace } from './fonts.ts';
 
 // Helvetica advance widths per 1000 em for ASCII 32..126 — the approximation for fonts we do not ship.
 const ASCII = [
@@ -27,7 +27,7 @@ function charWidth(c: number): number {
   return 0.6;
 }
 
-export interface TextStyle { family: string; fontSize: number; fontWeight: number; italic: boolean; letterSpacing: number; lineHeight: number }
+export interface TextStyle { family: string; fontSize: number; fontWeight: number; italic: boolean; letterSpacing: number; lineHeight: number; wrap: 'auto' | 'nowrap' | 'truncate'; maxLines?: number }
 
 export function textStyle(n: TandemNode): TextStyle {
   const fontSize = n.fontSize ?? 16;
@@ -38,7 +38,21 @@ export function textStyle(n: TandemNode): TextStyle {
     italic: n.italic === true,
     letterSpacing: n.letterSpacing ?? 0,
     lineHeight: (n.lineHeight ?? 1.3) * fontSize,
+    wrap: n.wrap ?? 'auto',
+    maxLines: n.maxLines,
   };
+}
+
+/** Faces to try per character: the requested one, then the generic fallbacks that ship with Draft. */
+function stack(st: TextStyle): FontFace[] {
+  const primary = faceFor(st.family, st.fontWeight, st.italic);
+  const out: FontFace[] = primary ? [primary] : [];
+  for (const family of FALLBACK_FAMILIES) {
+    if (primary && family === primary.family) continue;
+    const f = faceFor(family, st.fontWeight, false);
+    if (f) out.push(f);
+  }
+  return out;
 }
 
 /** Vertical distance from the top of a line box to the text baseline (CSS half-leading). */
@@ -51,36 +65,59 @@ export function baselineOffset(st: TextStyle): number {
 }
 
 export function measureLine(s: string, st: TextStyle): number {
-  const face = faceFor(st.family, st.fontWeight, st.italic);
-  if (!face) {
+  const faces = stack(st);
+  if (!faces.length) {
     // unknown family: Helvetica widths with a small weight adjustment, as before
     let em = 0, count = 0;
     for (const ch of s) { em += charWidth(ch.codePointAt(0)!); count++; }
     const weightFactor = 1 + Math.max(-0.04, Math.min(0.1, (st.fontWeight - 400) / 400 * 0.07));
     return em * st.fontSize * weightFactor + st.letterSpacing * count;
   }
-  const avg = averageWidth(face);
   let em = 0, count = 0;
   for (const ch of s) {
-    const cp = ch.codePointAt(0)!;
-    let w = advance(face, cp);
-    if (w === null) {
-      if (cp === 9) w = 1.1;
-      else if (cp === 0x0e31 || (cp >= 0x0e34 && cp <= 0x0e3a) || (cp >= 0x0e47 && cp <= 0x0e4e)) w = 0;
-      else if (cp >= 0x0300 && cp <= 0x036f) w = 0;
-      else if ((cp >= 0x1100 && cp <= 0x11ff) || (cp >= 0x2e80 && cp <= 0xa4cf) || (cp >= 0xac00 && cp <= 0xd7a3) || (cp >= 0xf900 && cp <= 0xfaff) || (cp >= 0xff00 && cp <= 0xff60)) w = 1;
-      else if (cp >= 0x1f300) w = 1.2;
-      else if (cp >= 0x0e00 && cp <= 0x0e7f) w = 0.58;
-      else w = avg;
-    }
-    em += w; count++;
+    em += glyphWidth(faces, ch.codePointAt(0)!);
+    count++;
   }
   return em * st.fontSize + st.letterSpacing * count;
+}
+
+function glyphWidth(faces: FontFace[], cp: number): number {
+  for (const face of faces) {
+    const w = advance(face, cp);
+    if (w !== null) return w;
+  }
+  // no bundled face covers it: script-shaped estimate against the primary face's scale
+  const avg = averageWidth(faces[0]);
+  if (cp === 9) return 1.1;
+  if (cp === 0x0e31 || (cp >= 0x0e34 && cp <= 0x0e3a) || (cp >= 0x0e47 && cp <= 0x0e4e)) return 0;
+  if (cp >= 0x0300 && cp <= 0x036f) return 0;
+  if ((cp >= 0x1100 && cp <= 0x11ff) || (cp >= 0x2e80 && cp <= 0xa4cf) || (cp >= 0xac00 && cp <= 0xd7a3) || (cp >= 0xf900 && cp <= 0xfaff) || (cp >= 0xff00 && cp <= 0xff60)) return 1;
+  if (cp >= 0x1f300) return 1.2;
+  if (cp >= 0x0e00 && cp <= 0x0e7f) return 0.58;
+  return avg || 0.6;
+}
+
+/** Cuts a line to fit maxWidth, ending with an ellipsis. */
+function ellipsize(line: string, st: TextStyle, maxWidth: number): string {
+  if (measureLine(line, st) <= maxWidth) return line;
+  const chars = [...line];
+  let lo = 0, hi = chars.length;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (measureLine(chars.slice(0, mid).join('') + '…', st) <= maxWidth) lo = mid;
+    else hi = mid - 1;
+  }
+  return chars.slice(0, lo).join('').trimEnd() + '…';
 }
 
 /** Splits text into lines, wrapping at maxWidth when given. */
 export function wrapText(text: string, st: TextStyle, maxWidth?: number): string[] {
   const out: string[] = [];
+  if (st.wrap === 'nowrap' || st.wrap === 'truncate') {
+    const single = text.replace(/\n/g, ' ');
+    out.push(st.wrap === 'truncate' && maxWidth !== undefined ? ellipsize(single, st, maxWidth) : single);
+    return out;
+  }
   for (const para of text.split('\n')) {
     if (maxWidth === undefined || measureLine(para, st) <= maxWidth + 0.5) { out.push(para); continue; }
     let line = '';
@@ -97,12 +134,21 @@ export function wrapText(text: string, st: TextStyle, maxWidth?: number): string
     }
     out.push(line.trimEnd());
   }
+  const limit = st.maxLines;
+  if (limit && out.length > limit) {
+    const kept = out.slice(0, limit);
+    kept[limit - 1] = maxWidth === undefined ? ellipsize(kept[limit - 1], st, measureLine(kept[limit - 1], st)) : ellipsize(kept[limit - 1], st, maxWidth);
+    return kept;
+  }
   return out;
 }
 
-export function measureText(n: TandemNode, maxWidth?: number): { lines: string[]; width: number; height: number } {
+export interface Measured { lines: string[]; width: number; height: number; truncated: boolean }
+
+export function measureText(n: TandemNode, maxWidth?: number): Measured {
   const st = textStyle(n);
   const lines = wrapText(n.text ?? '', st, maxWidth);
   const width = Math.ceil(Math.max(0, ...lines.map((l) => measureLine(l, st))));
-  return { lines, width, height: Math.ceil(lines.length * st.lineHeight) };
+  const whole = wrapText(n.text ?? '', { ...st, wrap: 'auto', maxLines: undefined }, maxWidth);
+  return { lines, width, height: Math.ceil(lines.length * st.lineHeight), truncated: lines.length < whole.length };
 }

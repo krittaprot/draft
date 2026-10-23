@@ -22,11 +22,11 @@ It is a clean-room take on the Figma mental model: frames, auto-layout, layers. 
 
 | Path | What it holds |
 | --- | --- |
-| `src/shared/` | Code that runs on both server and browser. `model.ts` holds the types, `NODE_TYPES` and the `MODEL_GUIDE` text agents read. `layout.ts` is the auto-layout engine. `text.ts` measures and wraps with real per-face metrics from `fonts.ts`. `fonts.ts` + `font-catalog.json` + `font-data.ts` are the font registry. `render.ts` turns a page into SVG. |
+| `src/shared/` | Code that runs on both server and browser. `model.ts` holds the types, `NODE_TYPES` and the `MODEL_GUIDE` text agents read. `layout.ts` is the auto-layout engine. `text.ts` measures and wraps with real per-face metrics from `fonts.ts`. `fonts.ts` + `font-catalog.json` + `font-data.ts` are the font registry. `resolve.ts` expands component instances and resolves `var:` tokens into the tree that is drawn. `color.ts` does alpha compositing and WCAG contrast, `predicate.ts` backs `find_nodes`/`update_where`. `render.ts` turns a page into SVG. |
 | `src/shared/schema.ts` | The zod prop schema. **Server only**: importing it from `src/web` pulls zod into the browser bundle (about 500 KB). Use `import type`. |
 | `src/server/store.ts` | File storage per document: gzipped snapshots for each revision, `history.jsonl`, `comments.json`. Deleting a document moves it to `trash/`. |
 | `src/server/ops.ts` | `applyOps`: create, update, delete, move, duplicate, page operations, rename. All edits go through here. |
-| `src/server/engine.ts` | Rendering (resvg PNG with the bundled families, macOS/Linux system fonts and `<data>/fonts`), font-usage warnings, share links, outline, HTML export, image fetch with an SSRF guard. |
+| `src/server/engine.ts` | Rendering (resvg PNG with the bundled families, macOS/Linux system fonts and `<data>/fonts`), instance/token resolution, layout warnings, contrast audit, token export, share links, outline, HTML export, image fetch with an SSRF guard. |
 | `src/server/mcp.ts` | The MCP tools (`design_guide`, `create_nodes`, `screenshot` and the rest). Stateless streamable HTTP. |
 | `src/server/http.ts` | Every HTTP route: `/api/*`, SSE `/api/events`, sign-in, OAuth, static files, signed `/r/…png` links. |
 | `src/server/auth.ts` | Tokens (only hashes are stored), members, sessions, the email allowlist. `auth.json` is reloaded when its mtime changes. |
@@ -89,8 +89,9 @@ node dist/server.js serve --port 3299 --data <scratch dir> --public-url http://1
 6. **The drawing tool is captured at pointerdown** (`S.drag.tool`), because the previous shape's save can finish mid-drag.
 7. **Home and editor routing is hash-based.** `#doc=<id>[&node=<id>]` opens a design; anything else shows Home. Live SSE refreshes of Home must check `onHome()` so they don't cover the editor.
 8. **Read-only UI.** `body.readonly` is set for viewers and during revision preview, `body.viewer` for viewers. Mark edit-only inspector buttons `edit-only` and comment buttons `comment-only`.
-9. **Only `pnpm fonts` writes `font-data.ts`.** The build computes the same metrics in memory and fails when a declared face is missing or when a font file's hash no longer matches `src/shared/fonts.lock.json`, so a release cannot ship metrics, CSS and binaries that disagree. `DRAFT_FONTS_OFFLINE=1` warns instead, and `pnpm fonts:check` reports missing faces alone. Font URLs carry a content hash, so a stylesheet and its binaries are always the same pair.
-10. **No synthetic styles.** Canvas text sets `font-synthesis: none`: a weight the family lacks resolves to the nearest real face, and a family without italics stays upright. The editor disables the italic toggle for those families and the MCP tools return a warning. Declare italics only where Google ships them.
+9. **Instances and tokens are resolved, never flattened.** `resolvePage()` in `src/shared/resolve.ts` runs on every render path (PNG, SVG, HTML, editor, outline). Nothing writes resolved values back into the document, so a component edit or a token change reaches every instance without a cascade step. `states` are prop patches keyed by component-local child id — never duplicate a variant tree, or edits stop cascading. Instance internals get ids like `btn~label` and are deliberately left out of `data-id`, so a click selects the instance, not a detached copy.
+10. **Only `pnpm fonts` writes `font-data.ts`.** The build computes the same metrics in memory and fails when a declared face is missing or when a font file's hash no longer matches `src/shared/fonts.lock.json`, so a release cannot ship metrics, CSS and binaries that disagree. `DRAFT_FONTS_OFFLINE=1` warns instead, and `pnpm fonts:check` reports missing faces alone. Font URLs carry a content hash, so a stylesheet and its binaries are always the same pair.
+11. **No synthetic styles.** Canvas text sets `font-synthesis: none`: a weight the family lacks resolves to the nearest real face, and a family without italics stays upright. The editor disables the italic toggle for those families and the MCP tools return a warning. Declare italics only where Google ships them.
 
 ## Testing sign-in
 
@@ -118,7 +119,8 @@ Done and live:
 - **Sharing and sign-in:** share links, OAuth for connector apps, Google sign-in locked to the allowlist.
 - **Site:** the public homepage and the installable PWA.
 - **Editor QA pass:** every control was clicked through, and the bugs it found were fixed in commit `203e0b3`.
-- **Typography:** 39 bundled families (248 faces), real per-face metrics, css-matched weights, no synthetic styles, `list_fonts`, and font warnings for agents. See "Fonts" in the README.
+- **Typography:** 39 bundled families (248 faces), real per-face metrics, css-matched weights, no synthetic styles, per-glyph fallback, `list_fonts`, and font warnings for agents. See "Fonts" in the README.
+- **Design system:** document variables (`var:paper`), components with instances/overrides that cascade on edit, state patches, `find_nodes`, `update_nodes({where})`, `dry_run`, layout warnings, `outline`/inner strokes, text `wrap`/`maxLines`, alpha compositing, `audit_contrast` and `export_tokens`. See "Design system" in the README.
 
 Open items, roughly by value:
 1. **Automated browser tests** (Playwright) for the editor flows listed under "Testing the editor". Today those checks are manual.

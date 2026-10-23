@@ -172,6 +172,18 @@ Typography rules the editor and the renderer share: canvas text sets `font-synth
 
 The font files are large, so `src/web/fonts/<slug>/` is git-ignored while the generated metrics are committed.
 
+### Design system
+
+Documents carry three authoring features that keep a large design consistent:
+
+- **Variables.** `manage_variables` sets document tokens (`{paper:"#faf6ef", space:8}`); props reference them as `"var:paper"`, including fill, stroke, text colour, shadow and outline colours, plus radius, gap, padding and strokeWidth. Changing a token re-renders every node that uses it, and `export_tokens` emits the set as CSS custom properties, DTCG-shaped JSON and a Tailwind `@theme` block.
+- **Components and instances.** A frame with `component:true` is a definition. `{type:"instance", component:"button"}` places it; `overrides` maps component-local child ids to props (`{"cta-label":{text:"Save"}}`, `"@root"` for the frame itself). Instances resolve at render time, so editing the definition — or moving a token — updates every instance; there is no flattening to keep in sync.
+- **States.** A component carries `states:{"hover":{"@root":{fill:"#2a261f"}, "cta-label":{color:"var:paper"}}}`: prop patches over the same tree, so a state never duplicates nodes. Instances pick one with `state`, and `screenshot({node, state:"hover"})` previews a definition's state without saving.
+
+Supporting tools close the loop: `find_nodes` queries by property rather than id, `update_nodes({where, props})` edits every match in one revision, `dry_run` validates a batch without writing, `create_nodes`/`update_nodes` return `warnings` for text and children that a clipped frame will cut off, `get_node.computed` reports alpha colours flattened against their backdrop, and `audit_contrast` checks text against the colour actually behind it with the nearest passing token suggested.
+
+Painting has `outline:{width, offset, color}` (a ring outside the box that does not affect layout) and `strokeAlign: inner|center|outer` (an inner border that does not change a component's width). Text has `wrap: auto|nowrap|truncate` and `maxLines`. Measurement walks a per-glyph fallback chain, so symbols like ⌘ are measured with the face that draws them instead of being clipped.
+
 ## Licence
 
 [MIT](LICENSE).
