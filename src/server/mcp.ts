@@ -162,6 +162,12 @@ export function buildMcpServer(engine: Engine, who: Principal): McpServer {
         unset: z.array(z.string()).optional().describe('properties to remove'),
       })).min(1).max(500).optional(),
       where: z.record(z.string(), z.any()).optional().describe('bulk edit: match nodes by property, e.g. {fill:"#c0baac"} or {text:{contains:"⌘"}, fontSize:{lt:12}}. Goes with props/unset'),
+      rules: z.array(z.object({
+        where: z.record(z.string(), z.any()),
+        props: z.record(z.string(), z.any()).optional(),
+        unset: z.array(z.string()).optional(),
+        page: z.string().optional(),
+      })).min(1).max(200).optional().describe('several predicate edits in one revision, e.g. tokenising a palette: [{where:{fill:"#faf6ef"}, props:{fill:"var:paper"}}, …]'),
       props: z.record(z.string(), z.any()).optional().describe('properties to set on every match (with where)'),
       unset: z.array(z.string()).optional().describe('properties to remove from every match (with where)'),
       page: z.string().optional().describe('limit a where edit to one page'),
@@ -169,18 +175,23 @@ export function buildMcpServer(engine: Engine, who: Principal): McpServer {
       atomic: z.boolean().optional(),
       message: messageArg, preview: previewArg,
     },
-  }, writer(async (a: { document: string; updates?: { id: string; props?: Record<string, unknown>; unset?: string[] }[]; where?: Record<string, unknown>; props?: Record<string, unknown>; unset?: string[]; page?: string; dry_run?: boolean; atomic?: boolean; message?: string; preview?: boolean }) => {
-    if (!!a.updates === !!a.where) throw new Error('give either updates (by id) or where (bulk match)');
-    const ops: Op[] = a.where
-      ? [{ op: 'update_where', where: a.where as Predicate, props: a.props, unset: a.unset, page: a.page }]
-      : a.updates!.map((u) => ({ op: 'update', id: u.id, props: u.props, unset: u.unset }));
+  }, writer(async (a: { document: string; updates?: { id: string; props?: Record<string, unknown>; unset?: string[] }[]; where?: Record<string, unknown>; rules?: { where: Record<string, unknown>; props?: Record<string, unknown>; unset?: string[]; page?: string }[]; props?: Record<string, unknown>; unset?: string[]; page?: string; dry_run?: boolean; atomic?: boolean; message?: string; preview?: boolean }) => {
+    const given = [!!a.updates, !!a.where, !!a.rules].filter(Boolean).length;
+    if (given !== 1) throw new Error('give exactly one of updates (by id), where (one bulk match) or rules (several)');
+    const ops: Op[] = a.rules
+      ? a.rules.map((r) => ({ op: 'update_where', where: r.where as Predicate, props: r.props, unset: r.unset, page: r.page }))
+      : a.where
+        ? [{ op: 'update_where', where: a.where as Predicate, props: a.props, unset: a.unset, page: a.page }]
+        : a.updates!.map((u) => ({ op: 'update', id: u.id, props: u.props, unset: u.unset }));
     if (a.dry_run) {
       const v = engine.validateOps(a.document, ops);
       return text(`dry run: ${v.ok ? 'would succeed' : 'would fail'}${v.ok ? `, would change ${v.wouldChange} nodes` : ''}\n${v.errors.length ? `errors:\n${v.errors.join('\n')}\n` : ''}${v.warnings.length ? `warnings:\n${v.warnings.join('\n')}` : ''}`);
     }
-    const r = await engine.apply(a.document, ops, who.name, a.message ?? (a.where ? 'Bulk update' : `Updated ${a.updates!.length} node${a.updates!.length > 1 ? 's' : ''}`), { atomic: a.atomic });
-    const ids = a.where ? r.changed : a.updates!.map((u) => u.id);
-    const res = text(`rev ${r.rev}: updated ${ids.length} node${ids.length === 1 ? '' : 's'}${a.where ? ` matching ${JSON.stringify(a.where)}` : `: ${ids.join(', ')}`}`
+    const label = a.rules ? `Applied ${a.rules.length} rules` : a.where ? 'Bulk update' : `Updated ${a.updates!.length} node${a.updates!.length > 1 ? 's' : ''}`;
+    const r = await engine.apply(a.document, ops, who.name, a.message ?? label, { atomic: a.atomic });
+    const ids = a.updates ? a.updates.map((u) => u.id) : r.changed;
+    const what = a.rules ? `${a.rules.length} rules` : a.where ? `matching ${JSON.stringify(a.where)}` : `: ${ids.join(', ')}`;
+    const res = text(`rev ${r.rev}: updated ${ids.length} node${ids.length === 1 ? '' : 's'}${a.updates ? `: ${ids.join(', ')}` : ` (${what})`}`
       + [r.errors.length ? `\nfailed:\n${r.errors.join('\n')}` : '', warningBlock(r), fontWarning(r.fontIssues)].join(''));
     return a.preview ? withPreview(res, a.document, ids) : res;
   }));

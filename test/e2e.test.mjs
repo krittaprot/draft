@@ -388,6 +388,24 @@ test('variables, components, states and bulk edits compose the way the docs say'
   const bulk = textOf(await call(c, 'update_nodes', { document: doc, where: { fontSize: 14 }, props: { fontSize: 16 } }));
   assert.match(bulk, /updated 1 node/, 'one definition node matched');
 
+  // several predicate edits land in one revision
+  await call(c, 'manage_variables', { document: doc, set: { ink: '#1d1a15', paper: '#faf6ef' } });
+  await call(c, 'create_nodes', { document: doc, nodes: [
+    { type: 'rect', id: 'swatch-a', x: 700, y: 0, width: 40, height: 40, fill: '#1d1a15' },
+    { type: 'rect', id: 'swatch-b', x: 750, y: 0, width: 40, height: 40, fill: '#faf6ef' },
+  ] });
+  const revA = Number(/rev (\d+)/.exec(textOf(await call(c, 'get_document', { document: doc })))[1]);
+  const ruled = textOf(await call(c, 'update_nodes', { document: doc, rules: [
+    { where: { fill: '#1d1a15' }, props: { fill: 'var:ink' } },
+    { where: { fill: '#faf6ef' }, props: { fill: 'var:paper' } },
+  ] }));
+  const revB = Number(/rev (\d+)/.exec(textOf(await call(c, 'get_document', { document: doc })))[1]);
+  assert.equal(revB, revA + 1, 'all rules share one revision');
+  assert.match(ruled, /updated 2 nodes \(2 rules\)/);
+  const stored = JSON.parse(textOf(await call(c, 'get_node', { document: doc, id: 'swatch-a' })));
+  assert.equal(stored.node.fill, 'var:ink');
+  assert.equal(stored.computed.fill, '#1d1a15');
+
   // dry runs report problems and never write
   const revBefore = Number(/rev (\d+)/.exec(textOf(await call(c, 'get_document', { document: doc })))[1]);
   const dry = textOf(await call(c, 'create_nodes', { document: doc, dry_run: true, nodes: [{ type: 'text', text: 'x', strokeWidth: null }] }));
