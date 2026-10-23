@@ -424,6 +424,24 @@ test('variables, components, states and bulk edits compose the way the docs say'
   const audit3 = textOf(await call(c, 'audit_contrast', { document: doc }));
   assert.match(audit3, /faded .*needs 4\.5:1/, 'a 35% black label on white is a failure');
 
+  // a sibling painted underneath the text is part of the backdrop
+  await call(c, 'create_nodes', { document: doc, nodes: [
+    { type: 'rect', id: 'behind-card', x: 600, y: 600, width: 220, height: 90, fill: '#f1ede6' },
+    { type: 'text', id: 'over-card', x: 616, y: 620, text: 'Sits on the card', fontSize: 12, color: '#cfc9bd' },
+  ] });
+  const audit5 = textOf(await call(c, 'audit_contrast', { document: doc }));
+  assert.match(audit5, /over-card .*#f1ede6/, 'the sibling card, not the page, is the backdrop');
+  assert.match(audit5, /over-card .*1\.4\d:1/);
+
+  // an icon behind text makes the backdrop unknowable, which is reported rather than guessed
+  await call(c, 'create_nodes', { document: doc, nodes: [
+    { type: 'svg', id: 'gauge', x: 600, y: 760, width: 40, height: 40, color: '#1d1a15', svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="3"/></svg>' },
+    { type: 'text', id: 'over-gauge', x: 606, y: 770, text: '42%', fontSize: 12, color: '#cfc9bd' },
+  ] });
+  const audit6 = textOf(await call(c, 'audit_contrast', { document: doc }));
+  assert.doesNotMatch(audit6, /over-gauge/, 'no ratio is invented for text over an icon');
+  assert.match(audit6, /sits on an image|sit on an image/);
+
   // a disabled control is exempt from 1.4.3, and says so in the audit and the export
   await call(c, 'create_nodes', { document: doc, nodes: [{ type: 'frame', id: 'inactive-tab', disabled: true, role: 'tab', label: 'Items', width: 'hug', layout: 'row', gap: 4,
     children: [{ type: 'text', text: 'Items', fontSize: 12, color: '#dad4c7' }] }] });

@@ -11,7 +11,7 @@ import { layoutPage, padding as padOf, type Boxes } from '../shared/layout.ts';
 import { measureText, textStyle } from '../shared/text.ts';
 import { cssFamily, isKnownFamily, italicWeights, normalizeFamily } from '../shared/fonts.ts';
 import { resolvePage } from '../shared/resolve.ts';
-import { composite, flattenOver, parseColor, contrastRatio, luminance } from '../shared/color.ts';
+import { composite, flattenOver, parseColor, toHex, contrastRatio, luminance } from '../shared/color.ts';
 import { compilePredicate, type Predicate } from '../shared/predicate.ts';
 import { variablesSchema } from '../shared/schema.ts';
 import { applyOps, OpError, type Op } from './ops.ts';
@@ -255,6 +255,7 @@ export class Engine {
     for (const page of doc.pages) {
       if (pageId && page.id !== pageId) continue;
       const failures: string[] = [];
+      const ctx = paintContext(page);
       walk({ ...doc, pages: [page] }, ({ node }) => {
         if (node.type !== 'text' || node.visible === false) return;
         const cfg = varLookup(doc, node.color);
@@ -271,7 +272,7 @@ export class Engine {
         }
         if (disabled) { exempt++; return; }
         if (alpha <= 0.01) return;
-        const backdrop = backdropOf(doc, page, node.id);
+        const backdrop = backdropOf(doc, page, node.id, ctx);
         if (backdrop.image) { unverified++; return; }
         let worst: { ratio: number; bg: string; rgba: NonNullable<ReturnType<typeof parseColor>>; painted: NonNullable<ReturnType<typeof parseColor>> } | null = null;
         for (const c of backdrop.colors) {
@@ -362,7 +363,7 @@ export class Engine {
     const w = indexDoc(doc).get(nodeId);
     if (!w) throw new OpError(`node "${nodeId}" not found`);
     const box = layoutPage(resolvePage(w.page, doc).page).get(nodeId)!;
-    return { node: w.node, box: roundBox(box), parent: w.parent?.id ?? w.page.id, page: w.page.id, computed: computedColors(doc, w.page, w.node) };
+    return { node: w.node, box: roundBox(box), parent: w.parent?.id ?? w.page.id, page: w.page.id, computed: computedColors(doc, w.page, w.node, paintContext(w.page)) };
   }
 
   exportHTML(doc: TandemDoc, nodeId: string): string {
@@ -548,40 +549,89 @@ interface Backdrop {
   /** Every colour the text could be sitting on, worst case included (gradient stops expand this). */
   colors: string[];
   gradient: boolean;
-  /** An image sits behind the text, so the contrast cannot be computed from the document. */
+  /** Something painted behind the text cannot be reduced to a colour (image, icon), so contrast is unknown. */
   image: boolean;
 }
 
-function backdropOf(doc: TandemDoc, page: Page, nodeId: string): Backdrop {
-  const idx = indexDoc(doc);
-  const chain: TandemNode[] = [];
-  for (let w = idx.get(nodeId)?.parent; w; w = idx.get(w.id)?.parent) chain.unshift(w);
-  let colors = [page.background ?? '#ffffff'];
+interface PaintEntry { node: TandemNode; chain: TandemNode[]; box: Box; order: number }
+interface PaintContext { boxes: Boxes; stack: PaintEntry[] }
+
+/** Every node in paint order, with the box it occupies and the ancestors that clip it. */
+function paintContext(page: Page): PaintContext {
+  const boxes = layoutPage(page);
+  const stack: PaintEntry[] = [];
+  const visit = (list: TandemNode[], chain: TandemNode[]) => {
+    for (const n of list) {
+      const box = boxes.get(n.id);
+      if (box) stack.push({ node: n, chain, box, order: stack.length });
+      if (n.children) visit(n.children, [...chain, n]);
+    }
+  };
+  visit(page.children, []);
+  return { boxes, stack };
+}
+
+const inside = (b: Box, x: number, y: number): boolean => x >= b.x - 0.5 && x <= b.x + b.w + 0.5 && y >= b.y - 0.5 && y <= b.y + b.h + 0.5;
+
+/**
+ * The colours actually behind a node: the page, then everything painted before it that covers its
+ * centre — ancestors and earlier siblings alike, which is what a renderer does. A backdrop that is an
+ * image or an icon is reported as unknown instead of guessed from the page colour.
+ */
+function backdropOf(doc: TandemDoc, page: Page, nodeId: string, ctx: PaintContext): Backdrop {
+  const base = page.background ?? '#ffffff';
+  const target = ctx.stack.find((e) => e.node.id === nodeId);
+  if (!target) return { colors: [base], gradient: false, image: false };
+  const cx = target.box.x + target.box.w / 2;
+  const cy = target.box.y + target.box.h / 2;
+  let colors = [base];
   let gradient = false;
-  for (const n of chain) {
+
+  for (const e of ctx.stack) {
+    if (e.order >= target.order) break;
+    if (e.node.type === 'text') continue;
+    if (!inside(e.box, cx, cy)) continue;
+    if (!e.chain.every((a) => inside(ctx.boxes.get(a.id) ?? e.box, cx, cy))) continue; // clipped away
+    const n = e.node;
     if (n.type === 'image' || (typeof n.src === 'string' && n.src)) return { colors, gradient, image: true };
+    if (n.type === 'svg' || n.type === 'path') {
+      if (typeof n.color === 'string' || typeof n.fill === 'string') return { colors, gradient, image: true };
+      continue;
+    }
+    const opacity = (n.opacity ?? 1) * e.chain.reduce((a, c) => a * (c.opacity ?? 1), 1);
+    if (opacity <= 0.01) continue;
     const f = varLookup(doc, n.fill);
-    if (typeof f === 'string') { colors = colors.map((c) => flattenOver(f, c)); continue; }
     const paints = Array.isArray(f) ? f : f ? [f] : [];
     const stops: string[] = [];
     for (const p of paints) {
       if (typeof p === 'string') stops.push(p);
       else if (p && typeof p === 'object' && Array.isArray((p as { stops?: unknown }).stops)) {
         gradient = true;
-        for (const s of (p as { stops: { color?: unknown }[] }).stops) if (typeof s.color === 'string') stops.push(s.color);
+        for (const st of (p as { stops: { color?: unknown }[] }).stops) {
+          const c = varLookup(doc, st.color);
+          if (typeof c === 'string') stops.push(c);
+        }
       }
     }
     if (!stops.length) continue;
     const next = new Set<string>();
-    for (const c of colors) for (const s of stops.slice(0, 8)) next.add(flattenOver(s, c));
+    for (const c of colors) for (const st of stops.slice(0, 8)) next.add(paintOver(st, c, opacity));
     colors = [...next].slice(0, 8);
   }
   return { colors, gradient, image: false };
 }
 
+/** Composites a fill over a backdrop, scaling its alpha by the paint opacity of the node. */
+function paintOver(fill: string, backdrop: string, opacity: number): string {
+  const top = parseColor(fill);
+  const bottom = parseColor(backdrop);
+  if (!top || !bottom) return backdrop;
+  return toHex(composite({ ...top, a: top.a * opacity }, { ...bottom, a: 1 }));
+}
+
 /** Alpha-resolved colours for a node, so exports and reviews can see the flat value. */
-function computedColors(doc: TandemDoc, page: Page, node: TandemNode): Record<string, string> {
-  const bg = backdropOf(doc, page, node.id).colors[0] ?? page.background ?? '#ffffff';
+function computedColors(doc: TandemDoc, page: Page, node: TandemNode, ctx: PaintContext): Record<string, string> {
+  const bg = backdropOf(doc, page, node.id, ctx).colors[0] ?? page.background ?? '#ffffff';
   const out: Record<string, string> = {};
   const fill = varLookup(doc, node.fill);
   const color = varLookup(doc, node.color);
