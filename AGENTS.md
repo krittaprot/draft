@@ -120,7 +120,7 @@ Done and live:
 - **Site:** the public homepage and the installable PWA.
 - **Editor QA pass:** every control was clicked through, and the bugs it found were fixed in commit `203e0b3`.
 - **Typography:** 39 bundled families (248 faces), real per-face metrics, css-matched weights, no synthetic styles, per-glyph fallback, `list_fonts`, and font warnings for agents. See "Fonts" in the README.
-- **Design system:** document variables (`var:paper`), components with instances/overrides that cascade on edit, state patches, `find_nodes`, `update_nodes({where})`, `dry_run`, layout warnings, `outline`/inner strokes, text `wrap`/`maxLines`, alpha compositing, `audit_contrast` and `export_tokens`. See "Design system" in the README.
+- **Design system:** document variables (`var:paper`), components with instances/overrides that cascade on edit, state patches, `find_nodes`, `update_nodes({where})`, `dry_run`, layout warnings, `outline`/inner strokes, text `wrap`/`maxLines`, alpha compositing, `audit_contrast` (grouped by page, disabled controls exempt), `export_tokens` and `role`/`label`/`alt`/`disabled` semantics. See "Design system" in the README.
 
 Open items, roughly by value:
 1. **Automated browser tests** (Playwright) for the editor flows listed under "Testing the editor". Today those checks are manual.
